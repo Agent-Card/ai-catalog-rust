@@ -5,6 +5,7 @@ Rust toolkit for the AI Catalog specification.
 The workspace is intended to land as `agntcy/ai-catalog-rust` and starts with
 the first useful slice: parse, serialize, and validate static AI Catalog
 documents against the current specification.
+It may move to the AI Catalog project at some point.
 
 ## Workspace
 
