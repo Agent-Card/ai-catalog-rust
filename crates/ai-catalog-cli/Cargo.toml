@@ -1,0 +1,17 @@
+# Copyright AGNTCY Contributors (https://github.com/agntcy)
+# SPDX-License-Identifier: Apache-2.0
+
+[package]
+name = "ai-catalog-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+ai-catalog = { path = "../ai-catalog" }
+ai-catalog-oci = { path = "../ai-catalog-oci" }
+ai-catalog-trust = { path = "../ai-catalog-trust" }
+ai-catalog-validate = { path = "../ai-catalog-validate" }
+serde_json.workspace = true

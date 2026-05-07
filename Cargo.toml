@@ -1,0 +1,26 @@
+# Copyright AGNTCY Contributors (https://github.com/agntcy)
+# SPDX-License-Identifier: Apache-2.0
+
+[workspace]
+members = [
+  "crates/ai-catalog",
+  "crates/ai-catalog-validate",
+  "crates/ai-catalog-trust",
+  "crates/ai-catalog-oci",
+  "crates/ai-catalog-cli",
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2024"
+license = "Apache-2.0"
+repository = "https://github.com/agntcy/ai-catalog-rust"
+rust-version = "1.95"
+version = "0.1.0"
+
+[workspace.dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sha2 = "0.10"
+thiserror = "2.0"
+time = { version = "0.3", features = ["formatting", "parsing"] }

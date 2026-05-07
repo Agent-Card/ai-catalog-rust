@@ -1,0 +1,16 @@
+# Copyright AGNTCY Contributors (https://github.com/agntcy)
+# SPDX-License-Identifier: Apache-2.0
+
+[package]
+name = "ai-catalog-trust"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+ai-catalog = { path = "../ai-catalog" }
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
