@@ -14,4 +14,6 @@ ai-catalog = { path = "../ai-catalog" }
 ai-catalog-oci = { path = "../ai-catalog-oci" }
 ai-catalog-trust = { path = "../ai-catalog-trust" }
 ai-catalog-validate = { path = "../ai-catalog-validate" }
+serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true

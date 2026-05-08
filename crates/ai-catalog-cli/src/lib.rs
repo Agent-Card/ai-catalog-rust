@@ -7,17 +7,23 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use ai_catalog::{parse_file, parse_reader, write_writer};
-use ai_catalog_oci::{OciArtifactSet, export_layout, import_layout, pack_catalog, unpack_catalog};
+use ai_catalog::{AiCatalog, parse_file, parse_reader, write_writer};
+use ai_catalog_oci::{
+    OciArtifactSet, attach_cosign_verification_artifacts, export_layout, import_layout,
+    pack_catalog, unpack_catalog,
+};
 use ai_catalog_trust::{
     CatalogTrustReport, Finding as TrustFinding, ManifestReport, Severity, analyze_catalog,
+    canonicalize_trust_manifest,
 };
 use ai_catalog_validate::{ConformanceLevel, Diagnostic, validate};
 use serde_json::json;
+use sha2::{Digest as _, Sha256};
 
 const BIN_NAME: &str = "ai-catalog-cli";
 const DEFAULT_OCI_LAYOUT_TAG: &str = "latest";
 const ORAS_BIN_ENV: &str = "AI_CATALOG_ORAS_BIN";
+const COSIGN_BIN_ENV: &str = "AI_CATALOG_COSIGN_BIN";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum OutputFormat {
@@ -42,6 +48,8 @@ struct OciExportLayoutOptions<'a> {
     path: &'a str,
     layout_path: &'a str,
     tag: &'a str,
+    cosign_key: Option<&'a str>,
+    cosign_public_key: Option<&'a str>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -58,6 +66,20 @@ struct OciPushOptions<'a> {
     to_oci_layout_path: Option<&'a str>,
     plain_http: bool,
     insecure: bool,
+    cosign_key: Option<&'a str>,
+    cosign_public_key: Option<&'a str>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CosignBlobBundle {
+    message_signature: CosignMessageSignature,
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CosignMessageSignature {
+    signature: String,
 }
 
 pub fn run<I, S, R, W, E>(args: I, stdin: &mut R, stdout: &mut W, stderr: &mut E) -> io::Result<i32>
@@ -389,6 +411,27 @@ fn oci_export_layout_command<R: Read, W: Write, E: Write>(
         }
     };
 
+    let mut artifacts = artifacts;
+
+    if let Some(cosign_key) = options.cosign_key {
+        match attach_cosign_material(
+            &catalog,
+            &mut artifacts,
+            cosign_key,
+            options.cosign_public_key,
+        ) {
+            Ok(attached) => {
+                if attached > 0 {
+                    writeln!(stdout, "attached Cosign verification artifacts for {attached} trust manifest(s)")?;
+                }
+            }
+            Err(error) => {
+                writeln!(stderr, "failed to attach Cosign verification artifacts: {error}")?;
+                return Ok(1);
+            }
+        }
+    }
+
     match export_layout(&artifacts, options.layout_path, options.tag) {
         Ok(()) => {
             writeln!(
@@ -477,6 +520,27 @@ fn oci_push_command<R: Read, W: Write, E: Write>(
             return Ok(1);
         }
     };
+
+    let mut artifacts = artifacts;
+
+    if let Some(cosign_key) = options.cosign_key {
+        match attach_cosign_material(
+            &catalog,
+            &mut artifacts,
+            cosign_key,
+            options.cosign_public_key,
+        ) {
+            Ok(attached) => {
+                if attached > 0 {
+                    writeln!(stdout, "attached Cosign verification artifacts for {attached} trust manifest(s)")?;
+                }
+            }
+            Err(error) => {
+                writeln!(stderr, "failed to attach Cosign verification artifacts: {error}")?;
+                return Ok(1);
+            }
+        }
+    }
 
     let layout_dir = temporary_layout_dir("ai-catalog-oras-layout");
     let result = push_artifacts_via_oras(&artifacts, &layout_dir, options, stdout, stderr);
@@ -673,6 +737,8 @@ fn parse_oci_export_layout_options<'a>(
     stderr: &mut impl Write,
 ) -> io::Result<Option<OciExportLayoutOptions<'a>>> {
     let mut tag = DEFAULT_OCI_LAYOUT_TAG;
+    let mut cosign_key = None;
+    let mut cosign_public_key = None;
     let mut positional = Vec::new();
     let mut index = 0;
 
@@ -689,6 +755,28 @@ fn parse_oci_export_layout_options<'a>(
 
                 tag = value;
             }
+            "--cosign-key" => {
+                index += 1;
+
+                let Some(value) = args.get(index) else {
+                    writeln!(stderr, "oci export-layout requires a value for --cosign-key")?;
+                    write_usage(stderr)?;
+                    return Ok(None);
+                };
+
+                cosign_key = Some(value.as_str());
+            }
+            "--cosign-public-key" => {
+                index += 1;
+
+                let Some(value) = args.get(index) else {
+                    writeln!(stderr, "oci export-layout requires a value for --cosign-public-key")?;
+                    write_usage(stderr)?;
+                    return Ok(None);
+                };
+
+                cosign_public_key = Some(value.as_str());
+            }
             "-" => positional.push("-"),
             value if value.starts_with('-') => {
                 writeln!(stderr, "unknown oci export-layout option: {value}")?;
@@ -699,6 +787,15 @@ fn parse_oci_export_layout_options<'a>(
         }
 
         index += 1;
+    }
+
+    if cosign_public_key.is_some() && cosign_key.is_none() {
+        writeln!(
+            stderr,
+            "oci export-layout requires --cosign-key when --cosign-public-key is set"
+        )?;
+        write_usage(stderr)?;
+        return Ok(None);
     }
 
     if positional.len() != 2 {
@@ -714,6 +811,8 @@ fn parse_oci_export_layout_options<'a>(
         path: positional[0],
         layout_path: positional[1],
         tag,
+        cosign_key,
+        cosign_public_key,
     }))
 }
 
@@ -725,6 +824,8 @@ fn parse_oci_push_options<'a>(
     let mut to_oci_layout_path = None;
     let mut plain_http = false;
     let mut insecure = false;
+    let mut cosign_key = None;
+    let mut cosign_public_key = None;
     let mut positional = Vec::new();
     let mut index = 0;
 
@@ -740,6 +841,28 @@ fn parse_oci_push_options<'a>(
                 };
 
                 tag = value;
+            }
+            "--cosign-key" => {
+                index += 1;
+
+                let Some(value) = args.get(index) else {
+                    writeln!(stderr, "oci push requires a value for --cosign-key")?;
+                    write_usage(stderr)?;
+                    return Ok(None);
+                };
+
+                cosign_key = Some(value.as_str());
+            }
+            "--cosign-public-key" => {
+                index += 1;
+
+                let Some(value) = args.get(index) else {
+                    writeln!(stderr, "oci push requires a value for --cosign-public-key")?;
+                    write_usage(stderr)?;
+                    return Ok(None);
+                };
+
+                cosign_public_key = Some(value.as_str());
             }
             "--to-oci-layout-path" => {
                 index += 1;
@@ -766,6 +889,15 @@ fn parse_oci_push_options<'a>(
         index += 1;
     }
 
+    if cosign_public_key.is_some() && cosign_key.is_none() {
+        writeln!(
+            stderr,
+            "oci push requires --cosign-key when --cosign-public-key is set"
+        )?;
+        write_usage(stderr)?;
+        return Ok(None);
+    }
+
     if positional.len() != 2 {
         writeln!(
             stderr,
@@ -782,6 +914,8 @@ fn parse_oci_push_options<'a>(
         to_oci_layout_path,
         plain_http,
         insecure,
+        cosign_key,
+        cosign_public_key,
     }))
 }
 
@@ -870,7 +1004,7 @@ fn write_usage(writer: &mut impl Write) -> io::Result<()> {
     writeln!(writer, "  {BIN_NAME} oci unpack <path|->")?;
     writeln!(
         writer,
-        "  {BIN_NAME} oci export-layout [--tag <tag>] <path|-> <layout-dir>"
+        "  {BIN_NAME} oci export-layout [--tag <tag>] [--cosign-key <path>] [--cosign-public-key <path>] <path|-> <layout-dir>"
     )?;
     writeln!(
         writer,
@@ -878,7 +1012,7 @@ fn write_usage(writer: &mut impl Write) -> io::Result<()> {
     )?;
     writeln!(
         writer,
-        "  {BIN_NAME} oci push [--tag <tag>] [--plain-http] [--insecure] [--to-oci-layout-path <layout-dir>] <path|-> <target>"
+        "  {BIN_NAME} oci push [--tag <tag>] [--plain-http] [--insecure] [--to-oci-layout-path <layout-dir>] [--cosign-key <path>] [--cosign-public-key <path>] <path|-> <target>"
     )?;
     writeln!(writer, "  {BIN_NAME} help")?;
     writeln!(writer, "  {BIN_NAME} version")?;
@@ -969,6 +1103,151 @@ fn execute_oras(args: &[String]) -> io::Result<std::process::Output> {
     let oras_bin = std::env::var(ORAS_BIN_ENV).unwrap_or_else(|_| "oras".to_owned());
 
     Command::new(oras_bin).args(args).output()
+}
+
+fn attach_cosign_material(
+    catalog: &AiCatalog,
+    artifacts: &mut OciArtifactSet,
+    cosign_key: &str,
+    cosign_public_key: Option<&str>,
+) -> io::Result<usize> {
+    let targets = catalog
+        .entries
+        .iter()
+        .zip(artifacts.index.manifests.iter())
+        .filter_map(|(entry, descriptor)| {
+            entry
+                .trust_manifest
+                .clone()
+                .map(|trust_manifest| (descriptor.digest.clone(), trust_manifest))
+        })
+        .collect::<Vec<_>>();
+
+    if targets.is_empty() {
+        return Ok(0);
+    }
+
+    let public_key = load_cosign_public_key(cosign_key, cosign_public_key)?;
+
+    for (subject_digest, trust_manifest) in targets {
+        let canonical_manifest =
+            canonicalize_trust_manifest(&trust_manifest).map_err(io::Error::other)?;
+        let canonical_bytes = canonical_manifest.into_bytes();
+        let payload_digest = format!(
+            "sha256:{}",
+            digest_hex(Sha256::digest(&canonical_bytes).as_slice())
+        );
+        let signature = sign_blob_with_cosign(&canonical_bytes, cosign_key)?;
+
+        attach_cosign_verification_artifacts(
+            artifacts,
+            &subject_digest,
+            &trust_manifest.identity,
+            &payload_digest,
+            &signature,
+            &public_key,
+        )
+        .map_err(io::Error::other)?;
+    }
+
+    Ok(catalog
+        .entries
+        .iter()
+        .filter(|entry| entry.trust_manifest.is_some())
+        .count())
+}
+
+fn load_cosign_public_key(
+    cosign_key: &str,
+    cosign_public_key: Option<&str>,
+) -> io::Result<Vec<u8>> {
+    if let Some(path) = cosign_public_key {
+        return fs::read(path);
+    }
+
+    let args = build_cosign_public_key_args(cosign_key);
+    let output = execute_cosign(&args)?;
+
+    if output.status.success() {
+        Ok(output.stdout)
+    } else {
+        Err(command_failure("cosign public-key", &output))
+    }
+}
+
+fn sign_blob_with_cosign(payload: &[u8], cosign_key: &str) -> io::Result<Vec<u8>> {
+    let work_dir = temporary_layout_dir("ai-catalog-cosign");
+    let payload_path = work_dir.join("trust-manifest.json");
+    let bundle_path = work_dir.join("trust-manifest.bundle.json");
+
+    fs::create_dir_all(&work_dir)?;
+    fs::write(&payload_path, payload)?;
+
+    let args = build_cosign_sign_blob_args(cosign_key, &payload_path, &bundle_path);
+    let output = execute_cosign(&args)?;
+    let result = if output.status.success() {
+        let bundle_bytes = fs::read(&bundle_path)?;
+        let bundle: CosignBlobBundle = serde_json::from_slice(&bundle_bytes).map_err(io::Error::other)?;
+
+        Ok(bundle.message_signature.signature.into_bytes())
+    } else {
+        Err(command_failure("cosign sign-blob", &output))
+    };
+
+    let _ = fs::remove_dir_all(&work_dir);
+    result
+}
+
+fn build_cosign_sign_blob_args(
+    cosign_key: &str,
+    payload_path: &Path,
+    bundle_path: &Path,
+) -> Vec<String> {
+    vec![
+        "sign-blob".to_owned(),
+        "--yes".to_owned(),
+        "--key".to_owned(),
+        cosign_key.to_owned(),
+        "--bundle".to_owned(),
+        bundle_path.display().to_string(),
+        payload_path.display().to_string(),
+    ]
+}
+
+fn build_cosign_public_key_args(cosign_key: &str) -> Vec<String> {
+    vec!["public-key".to_owned(), "--key".to_owned(), cosign_key.to_owned()]
+}
+
+fn execute_cosign(args: &[String]) -> io::Result<std::process::Output> {
+    let cosign_bin = std::env::var(COSIGN_BIN_ENV).unwrap_or_else(|_| "cosign".to_owned());
+
+    Command::new(cosign_bin).args(args).output()
+}
+
+fn command_failure(command: &str, output: &std::process::Output) -> io::Error {
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+    let details = if !stderr.is_empty() {
+        stderr
+    } else if !stdout.is_empty() {
+        stdout
+    } else {
+        format!("exited with status {}", output.status)
+    };
+
+    io::Error::other(format!("{command} failed: {details}"))
+}
+
+fn digest_hex(bytes: &[u8]) -> String {
+    let mut hex = String::with_capacity(bytes.len() * 2);
+
+    for byte in bytes {
+        use std::fmt::Write as _;
+
+        let _ = write!(&mut hex, "{byte:02x}");
+    }
+
+    hex
 }
 
 fn write_process_output(writer: &mut impl Write, bytes: &[u8]) -> io::Result<()> {
@@ -1190,13 +1469,21 @@ fn conformance_level_name(level: ConformanceLevel) -> &'static str {
 
 #[cfg(test)]
 mod tests {
+    use ai_catalog_oci::{
+        COSIGN_PUBLIC_KEY_ARTIFACT_TYPE, COSIGN_SIGNATURE_ARTIFACT_TYPE,
+        TRUST_MANIFEST_ARTIFACT_TYPE, import_layout,
+    };
     use super::run;
 
     use serde_json::Value;
     use std::env;
     use std::fs;
+    use std::io::Write as _;
+    #[cfg(unix)]
+    use std::os::unix::fs::PermissionsExt;
     use std::path::Path;
     use std::path::PathBuf;
+    use std::sync::{Mutex, OnceLock};
 
     #[test]
     fn prints_help_without_arguments() {
@@ -1207,9 +1494,9 @@ mod tests {
         assert!(stdout.contains("validate [--json] <path|->"));
         assert!(stdout.contains("trust inspect [--json] <path|->"));
         assert!(stdout.contains("oci pack <path|->"));
-        assert!(stdout.contains("oci export-layout [--tag <tag>] <path|-> <layout-dir>"));
+        assert!(stdout.contains("oci export-layout [--tag <tag>] [--cosign-key <path>] [--cosign-public-key <path>] <path|-> <layout-dir>"));
         assert!(stdout.contains("oci unpack-layout [--ref-name <name>] <layout-dir>"));
-        assert!(stdout.contains("oci push [--tag <tag>] [--plain-http] [--insecure] [--to-oci-layout-path <layout-dir>] <path|-> <target>"));
+        assert!(stdout.contains("oci push [--tag <tag>] [--plain-http] [--insecure] [--to-oci-layout-path <layout-dir>] [--cosign-key <path>] [--cosign-public-key <path>] <path|-> <target>"));
         assert!(stderr.is_empty());
     }
 
@@ -1526,6 +1813,86 @@ mod tests {
     }
 
     #[test]
+    fn rejects_cosign_public_key_without_cosign_key() {
+        let layout_dir = unique_temp_dir("ai-catalog-cli-layout-cosign-option");
+        let (exit_code, stdout, stderr) = run_command(
+            [
+                "ai-catalog-cli",
+                "oci",
+                "export-layout",
+                "--cosign-public-key",
+                "cosign.pub",
+                "-",
+                layout_dir.to_str().expect("path should be utf-8"),
+            ],
+            &canonical_fixture_text(),
+        );
+
+        assert_eq!(exit_code, 2);
+        assert!(stdout.is_empty());
+        assert!(stderr.contains("requires --cosign-key when --cosign-public-key is set"));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn oci_export_layout_with_cosign_writes_signature_and_key_referrers() {
+        let fixture = r#"{
+    "specVersion": "1.0",
+    "entries": [
+        {
+            "identifier": "urn:example:model",
+            "displayName": "Example Model",
+            "mediaType": "application/json",
+            "data": { "name": "example" },
+            "trustManifest": {
+                "identity": "urn:example:model"
+            }
+        }
+    ]
+}"#;
+        let layout_dir = unique_temp_dir("ai-catalog-cli-layout-cosign");
+        let tool_dir = unique_temp_dir("ai-catalog-cli-fake-cosign");
+
+        fs::create_dir_all(&tool_dir).expect("tool dir should exist");
+        let script_path = write_fake_cosign_script(&tool_dir);
+
+        let (exit_code, stdout, stderr) = with_env_var(super::COSIGN_BIN_ENV, script_path.as_os_str(), || {
+            run_command(
+                [
+                    "ai-catalog-cli",
+                    "oci",
+                    "export-layout",
+                    "--cosign-key",
+                    "fake.key",
+                    "--tag",
+                    "demo",
+                    "-",
+                    layout_dir.to_str().expect("path should be utf-8"),
+                ],
+                fixture,
+            )
+        });
+
+        assert_eq!(exit_code, 0);
+        assert!(stdout.contains("attached Cosign verification artifacts for 1 trust manifest(s)"));
+        assert!(stderr.is_empty());
+
+        let imported = import_layout(&layout_dir, Some("demo")).expect("layout should import");
+        let entry_digest = imported.index.manifests[0].digest.clone();
+        let referrer_types = imported.referrers[&entry_digest]
+            .iter()
+            .filter_map(|manifest| manifest.artifact_type.as_deref())
+            .collect::<Vec<_>>();
+
+        assert!(referrer_types.contains(&TRUST_MANIFEST_ARTIFACT_TYPE));
+        assert!(referrer_types.contains(&COSIGN_SIGNATURE_ARTIFACT_TYPE));
+        assert!(referrer_types.contains(&COSIGN_PUBLIC_KEY_ARTIFACT_TYPE));
+
+        fs::remove_dir_all(layout_dir).expect("layout dir should be removable");
+        fs::remove_dir_all(tool_dir).expect("tool dir should be removable");
+    }
+
+    #[test]
     fn oci_unpack_layout_round_trips_exported_layout() {
         let fixture = canonical_fixture_text();
         let layout_dir = unique_temp_dir("ai-catalog-cli-unpack-layout");
@@ -1619,6 +1986,35 @@ mod tests {
     }
 
     #[test]
+    fn builds_cosign_sign_blob_arguments() {
+        let args = super::build_cosign_sign_blob_args(
+            "cosign.key",
+            Path::new("/tmp/trust-manifest.json"),
+            Path::new("/tmp/trust-manifest.sig"),
+        );
+
+        assert_eq!(
+            args,
+            vec![
+                "sign-blob",
+                "--yes",
+                "--key",
+                "cosign.key",
+                "--bundle",
+                "/tmp/trust-manifest.sig",
+                "/tmp/trust-manifest.json",
+            ]
+        );
+    }
+
+    #[test]
+    fn builds_cosign_public_key_arguments() {
+        let args = super::build_cosign_public_key_args("cosign.key");
+
+        assert_eq!(args, vec!["public-key", "--key", "cosign.key"]);
+    }
+
+    #[test]
     fn strips_tags_from_target_repositories() {
         assert_eq!(
             super::target_repository("example.com/catalog:demo"),
@@ -1668,5 +2064,52 @@ mod tests {
             String::from_utf8(stdout).expect("stdout should be utf-8"),
             String::from_utf8(stderr).expect("stderr should be utf-8"),
         )
+    }
+
+    fn with_env_var<T>(key: &str, value: &std::ffi::OsStr, f: impl FnOnce() -> T) -> T {
+        static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+
+        let _guard = ENV_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("env lock should be available");
+        let previous = env::var_os(key);
+        unsafe {
+            env::set_var(key, value);
+        }
+        let result = f();
+
+        if let Some(previous) = previous {
+            unsafe {
+                env::set_var(key, previous);
+            }
+        } else {
+            unsafe {
+                env::remove_var(key);
+            }
+        }
+
+        result
+    }
+
+    #[cfg(unix)]
+    fn write_fake_cosign_script(dir: &Path) -> PathBuf {
+        let script_path = dir.join("fake-cosign.sh");
+        let mut file = fs::File::create(&script_path).expect("script should be creatable");
+
+        write!(
+            file,
+            "{}",
+            "#!/bin/sh\nset -eu\ncmd=\"$1\"\nshift\ncase \"$cmd\" in\n  public-key)\n    echo '-----BEGIN PUBLIC KEY-----'\n    echo 'RkFLRUNPU0lHTlBVQkxJQ0tFWQ=='\n    echo '-----END PUBLIC KEY-----'\n    ;;\n  sign-blob)\n    bundle=''\n    while [ $# -gt 0 ]; do\n      case \"$1\" in\n        --bundle)\n          bundle=\"$2\"\n          shift 2\n          ;;\n        --key)\n          shift 2\n          ;;\n        --yes)\n          shift 1\n          ;;\n        *)\n          shift 1\n          ;;\n      esac\n    done\n    printf '{\"mediaType\":\"application/vnd.dev.sigstore.bundle.v0.3+json\",\"messageSignature\":{\"signature\":\"fake-cosign-signature\"}}' > \"$bundle\"\n    ;;\n  *)\n    echo \"unexpected cosign command: $cmd\" >&2\n    exit 1\n    ;;\nesac"
+        )
+        .expect("script should be writable");
+
+        let mut permissions = fs::metadata(&script_path)
+            .expect("script metadata should exist")
+            .permissions();
+        permissions.set_mode(0o755);
+        fs::set_permissions(&script_path, permissions).expect("script should be executable");
+
+        script_path
     }
 }

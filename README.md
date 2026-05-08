@@ -49,8 +49,10 @@ cargo run -p ai-catalog-cli -- trust inspect --json fixtures/spec-example.json
 cargo run -p ai-catalog-cli -- oci pack fixtures/spec-example.json
 cargo run -p ai-catalog-cli -- oci unpack artifacts.json
 cargo run -p ai-catalog-cli -- oci export-layout fixtures/spec-example.json /tmp/ai-catalog-layout
+cargo run -p ai-catalog-cli -- oci export-layout --cosign-key cosign.key fixtures/spec-example.json /tmp/ai-catalog-layout
 cargo run -p ai-catalog-cli -- oci unpack-layout /tmp/ai-catalog-layout
 cargo run -p ai-catalog-cli -- oci push fixtures/spec-example.json ghcr.io/example/ai-catalog:latest
+cargo run -p ai-catalog-cli -- oci push --cosign-key cosign.key fixtures/spec-example.json ghcr.io/example/ai-catalog:latest
 cargo run -p ai-catalog-cli -- oci push fixtures/spec-example.json example.com:latest --to-oci-layout-path /tmp/ai-catalog-copy
 cat fixtures/spec-example.json | cargo run -p ai-catalog-cli -- validate --json -
 cat fixtures/spec-example.json | cargo run -p ai-catalog-cli -- format -
@@ -62,6 +64,12 @@ the Rust library. `oci export-layout` writes a standard OCI image layout directo
 `oci unpack-layout` imports that standard layout back into AI Catalog JSON, and
 `oci push` delegates distribution to `oras cp -r` from a temporary exported layout
 so standard OCI tooling can validate or publish the result.
+
+When `--cosign-key` is supplied to `oci export-layout` or `oci push`, the CLI
+canonicalizes each entry trust manifest, signs that blob with `cosign sign-blob`,
+derives or reads a PEM public key, and stores both the detached signature and
+public key as OCI referrer artifacts in the exported layout. If the private key
+is encrypted, provide the password non-interactively through `COSIGN_PASSWORD`.
 
 ## Demo
 
