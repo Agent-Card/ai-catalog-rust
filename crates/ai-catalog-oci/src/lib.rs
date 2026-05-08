@@ -20,14 +20,11 @@ pub const OCI_REF_NAME_ANNOTATION: &str = "org.opencontainers.image.ref.name";
 pub const TRUST_MANIFEST_ARTIFACT_TYPE: &str = "application/vnd.ai-catalog.trust-manifest.v1+json";
 pub const TRUST_MANIFEST_CONFIG_MEDIA_TYPE: &str =
     "application/vnd.ai-catalog.trust-manifest.config.v1+json";
-pub const COSIGN_SIGNATURE_ARTIFACT_TYPE: &str =
-    "application/vnd.ai-catalog.cosign.signature.v1";
+pub const COSIGN_SIGNATURE_ARTIFACT_TYPE: &str = "application/vnd.ai-catalog.cosign.signature.v1";
 pub const COSIGN_SIGNATURE_CONFIG_MEDIA_TYPE: &str =
     "application/vnd.ai-catalog.cosign.signature.config.v1+json";
-pub const COSIGN_SIGNATURE_LAYER_MEDIA_TYPE: &str =
-    "application/vnd.dev.sigstore.cosign.signature";
-pub const COSIGN_PUBLIC_KEY_ARTIFACT_TYPE: &str =
-    "application/vnd.ai-catalog.cosign.public-key.v1";
+pub const COSIGN_SIGNATURE_LAYER_MEDIA_TYPE: &str = "application/vnd.dev.sigstore.cosign.signature";
+pub const COSIGN_PUBLIC_KEY_ARTIFACT_TYPE: &str = "application/vnd.ai-catalog.cosign.public-key.v1";
 pub const COSIGN_PUBLIC_KEY_CONFIG_MEDIA_TYPE: &str =
     "application/vnd.ai-catalog.cosign.public-key.config.v1+json";
 pub const COSIGN_PUBLIC_KEY_LAYER_MEDIA_TYPE: &str =
@@ -744,19 +741,28 @@ fn trust_manifest_annotations(manifest: &TrustManifest) -> BTreeMap<String, Stri
 fn cosign_signature_annotations(identity: &str, payload_digest: &str) -> BTreeMap<String, String> {
     BTreeMap::from([
         ("ai-catalog.identity".to_owned(), identity.to_owned()),
-        ("ai-catalog.payloadDigest".to_owned(), payload_digest.to_owned()),
+        (
+            "ai-catalog.payloadDigest".to_owned(),
+            payload_digest.to_owned(),
+        ),
         (
             "ai-catalog.payloadMediaType".to_owned(),
             TRUST_MANIFEST_ARTIFACT_TYPE.to_owned(),
         ),
-        ("ai-catalog.verificationMaterial".to_owned(), "cosign-signature".to_owned()),
+        (
+            "ai-catalog.verificationMaterial".to_owned(),
+            "cosign-signature".to_owned(),
+        ),
     ])
 }
 
 fn cosign_public_key_annotations(identity: &str, payload_digest: &str) -> BTreeMap<String, String> {
     BTreeMap::from([
         ("ai-catalog.identity".to_owned(), identity.to_owned()),
-        ("ai-catalog.payloadDigest".to_owned(), payload_digest.to_owned()),
+        (
+            "ai-catalog.payloadDigest".to_owned(),
+            payload_digest.to_owned(),
+        ),
         (
             "ai-catalog.payloadMediaType".to_owned(),
             TRUST_MANIFEST_ARTIFACT_TYPE.to_owned(),
@@ -846,10 +852,10 @@ mod tests {
 
     use super::{
         AI_CATALOG_MEDIA_TYPE, COSIGN_PUBLIC_KEY_ARTIFACT_TYPE, COSIGN_SIGNATURE_ARTIFACT_TYPE,
-        ENTRY_CONFIG_MEDIA_TYPE, Error, OCI_IMAGE_INDEX_MEDIA_TYPE,
-        OCI_IMAGE_MANIFEST_MEDIA_TYPE, OCI_LAYOUT_VERSION, OCI_REF_NAME_ANNOTATION,
-        TRUST_MANIFEST_ARTIFACT_TYPE, attach_cosign_verification_artifacts,
-        descriptor_for_bytes, export_layout, import_layout, pack_catalog, unpack_catalog,
+        ENTRY_CONFIG_MEDIA_TYPE, Error, OCI_IMAGE_INDEX_MEDIA_TYPE, OCI_IMAGE_MANIFEST_MEDIA_TYPE,
+        OCI_LAYOUT_VERSION, OCI_REF_NAME_ANNOTATION, TRUST_MANIFEST_ARTIFACT_TYPE,
+        attach_cosign_verification_artifacts, descriptor_for_bytes, export_layout, import_layout,
+        pack_catalog, unpack_catalog,
     };
 
     #[test]
@@ -1181,10 +1187,10 @@ mod tests {
         fs::remove_dir_all(&layout_dir).expect("temp layout should be removed");
     }
 
-        #[test]
-        fn unpacks_catalog_with_additional_cosign_referrers() {
-                let catalog = parse_str(
-                        r#"{
+    #[test]
+    fn unpacks_catalog_with_additional_cosign_referrers() {
+        let catalog = parse_str(
+            r#"{
 			  "specVersion": "1.0",
 			  "entries": [
 				{
@@ -1200,31 +1206,31 @@ mod tests {
 				}
 			  ]
 			}"#,
-                )
-                .expect("catalog should parse");
-                let mut artifacts = pack_catalog(&catalog).expect("catalog should pack");
-                let entry_digest = artifacts.index.manifests[0].digest.clone();
+        )
+        .expect("catalog should parse");
+        let mut artifacts = pack_catalog(&catalog).expect("catalog should pack");
+        let entry_digest = artifacts.index.manifests[0].digest.clone();
 
-                attach_cosign_verification_artifacts(
-                        &mut artifacts,
-                        &entry_digest,
-                        "urn:example:inline",
-                        "sha256:1234abcd",
-                        b"cosign-signature",
-                        b"-----BEGIN PUBLIC KEY-----\nZmFrZQ==\n-----END PUBLIC KEY-----\n",
-                )
-                .expect("cosign artifacts should attach");
+        attach_cosign_verification_artifacts(
+            &mut artifacts,
+            &entry_digest,
+            "urn:example:inline",
+            "sha256:1234abcd",
+            b"cosign-signature",
+            b"-----BEGIN PUBLIC KEY-----\nZmFrZQ==\n-----END PUBLIC KEY-----\n",
+        )
+        .expect("cosign artifacts should attach");
 
-                let unpacked = unpack_catalog(&artifacts).expect("artifacts should still unpack");
+        let unpacked = unpack_catalog(&artifacts).expect("artifacts should still unpack");
 
-                assert_eq!(unpacked, catalog);
-                assert_eq!(artifacts.referrers[&entry_digest].len(), 3);
-        }
+        assert_eq!(unpacked, catalog);
+        assert_eq!(artifacts.referrers[&entry_digest].len(), 3);
+    }
 
-        #[test]
-        fn exports_and_imports_cosign_referrers() {
-                let catalog = parse_str(
-                        r#"{
+    #[test]
+    fn exports_and_imports_cosign_referrers() {
+        let catalog = parse_str(
+            r#"{
 			  "specVersion": "1.0",
 			  "entries": [
 				{
@@ -1240,37 +1246,37 @@ mod tests {
 				}
 			  ]
 			}"#,
-                )
-                .expect("catalog should parse");
-                let mut artifacts = pack_catalog(&catalog).expect("catalog should pack");
-                let entry_digest = artifacts.index.manifests[0].digest.clone();
-                let layout_dir = unique_temp_dir("ai-catalog-layout-cosign-referrers");
+        )
+        .expect("catalog should parse");
+        let mut artifacts = pack_catalog(&catalog).expect("catalog should pack");
+        let entry_digest = artifacts.index.manifests[0].digest.clone();
+        let layout_dir = unique_temp_dir("ai-catalog-layout-cosign-referrers");
 
-                attach_cosign_verification_artifacts(
-                        &mut artifacts,
-                        &entry_digest,
-                        "urn:example:inline",
-                        "sha256:1234abcd",
-                        b"cosign-signature",
-                        b"-----BEGIN PUBLIC KEY-----\nZmFrZQ==\n-----END PUBLIC KEY-----\n",
-                )
-                .expect("cosign artifacts should attach");
+        attach_cosign_verification_artifacts(
+            &mut artifacts,
+            &entry_digest,
+            "urn:example:inline",
+            "sha256:1234abcd",
+            b"cosign-signature",
+            b"-----BEGIN PUBLIC KEY-----\nZmFrZQ==\n-----END PUBLIC KEY-----\n",
+        )
+        .expect("cosign artifacts should attach");
 
-                export_layout(&artifacts, &layout_dir, "inline").expect("layout export should succeed");
+        export_layout(&artifacts, &layout_dir, "inline").expect("layout export should succeed");
 
-                let imported =
-                        import_layout(&layout_dir, Some("inline")).expect("layout import should succeed");
-                let imported_types = imported.referrers[&entry_digest]
-                        .iter()
-                        .filter_map(|manifest| manifest.artifact_type.as_deref())
-                        .collect::<Vec<_>>();
+        let imported =
+            import_layout(&layout_dir, Some("inline")).expect("layout import should succeed");
+        let imported_types = imported.referrers[&entry_digest]
+            .iter()
+            .filter_map(|manifest| manifest.artifact_type.as_deref())
+            .collect::<Vec<_>>();
 
-                assert!(imported_types.contains(&TRUST_MANIFEST_ARTIFACT_TYPE));
-                assert!(imported_types.contains(&COSIGN_SIGNATURE_ARTIFACT_TYPE));
-                assert!(imported_types.contains(&COSIGN_PUBLIC_KEY_ARTIFACT_TYPE));
+        assert!(imported_types.contains(&TRUST_MANIFEST_ARTIFACT_TYPE));
+        assert!(imported_types.contains(&COSIGN_SIGNATURE_ARTIFACT_TYPE));
+        assert!(imported_types.contains(&COSIGN_PUBLIC_KEY_ARTIFACT_TYPE));
 
-                fs::remove_dir_all(&layout_dir).expect("temp layout should be removed");
-        }
+        fs::remove_dir_all(&layout_dir).expect("temp layout should be removed");
+    }
 
     #[test]
     fn rejects_unknown_layout_reference() {

@@ -422,11 +422,17 @@ fn oci_export_layout_command<R: Read, W: Write, E: Write>(
         ) {
             Ok(attached) => {
                 if attached > 0 {
-                    writeln!(stdout, "attached Cosign verification artifacts for {attached} trust manifest(s)")?;
+                    writeln!(
+                        stdout,
+                        "attached Cosign verification artifacts for {attached} trust manifest(s)"
+                    )?;
                 }
             }
             Err(error) => {
-                writeln!(stderr, "failed to attach Cosign verification artifacts: {error}")?;
+                writeln!(
+                    stderr,
+                    "failed to attach Cosign verification artifacts: {error}"
+                )?;
                 return Ok(1);
             }
         }
@@ -532,11 +538,17 @@ fn oci_push_command<R: Read, W: Write, E: Write>(
         ) {
             Ok(attached) => {
                 if attached > 0 {
-                    writeln!(stdout, "attached Cosign verification artifacts for {attached} trust manifest(s)")?;
+                    writeln!(
+                        stdout,
+                        "attached Cosign verification artifacts for {attached} trust manifest(s)"
+                    )?;
                 }
             }
             Err(error) => {
-                writeln!(stderr, "failed to attach Cosign verification artifacts: {error}")?;
+                writeln!(
+                    stderr,
+                    "failed to attach Cosign verification artifacts: {error}"
+                )?;
                 return Ok(1);
             }
         }
@@ -759,7 +771,10 @@ fn parse_oci_export_layout_options<'a>(
                 index += 1;
 
                 let Some(value) = args.get(index) else {
-                    writeln!(stderr, "oci export-layout requires a value for --cosign-key")?;
+                    writeln!(
+                        stderr,
+                        "oci export-layout requires a value for --cosign-key"
+                    )?;
                     write_usage(stderr)?;
                     return Ok(None);
                 };
@@ -770,7 +785,10 @@ fn parse_oci_export_layout_options<'a>(
                 index += 1;
 
                 let Some(value) = args.get(index) else {
-                    writeln!(stderr, "oci export-layout requires a value for --cosign-public-key")?;
+                    writeln!(
+                        stderr,
+                        "oci export-layout requires a value for --cosign-public-key"
+                    )?;
                     write_usage(stderr)?;
                     return Ok(None);
                 };
@@ -1187,7 +1205,8 @@ fn sign_blob_with_cosign(payload: &[u8], cosign_key: &str) -> io::Result<Vec<u8>
     let output = execute_cosign(&args)?;
     let result = if output.status.success() {
         let bundle_bytes = fs::read(&bundle_path)?;
-        let bundle: CosignBlobBundle = serde_json::from_slice(&bundle_bytes).map_err(io::Error::other)?;
+        let bundle: CosignBlobBundle =
+            serde_json::from_slice(&bundle_bytes).map_err(io::Error::other)?;
 
         Ok(bundle.message_signature.signature.into_bytes())
     } else {
@@ -1215,7 +1234,11 @@ fn build_cosign_sign_blob_args(
 }
 
 fn build_cosign_public_key_args(cosign_key: &str) -> Vec<String> {
-    vec!["public-key".to_owned(), "--key".to_owned(), cosign_key.to_owned()]
+    vec![
+        "public-key".to_owned(),
+        "--key".to_owned(),
+        cosign_key.to_owned(),
+    ]
 }
 
 fn execute_cosign(args: &[String]) -> io::Result<std::process::Output> {
@@ -1469,11 +1492,11 @@ fn conformance_level_name(level: ConformanceLevel) -> &'static str {
 
 #[cfg(test)]
 mod tests {
+    use super::run;
     use ai_catalog_oci::{
         COSIGN_PUBLIC_KEY_ARTIFACT_TYPE, COSIGN_SIGNATURE_ARTIFACT_TYPE,
         TRUST_MANIFEST_ARTIFACT_TYPE, import_layout,
     };
-    use super::run;
 
     use serde_json::Value;
     use std::env;
@@ -1856,22 +1879,23 @@ mod tests {
         fs::create_dir_all(&tool_dir).expect("tool dir should exist");
         let script_path = write_fake_cosign_script(&tool_dir);
 
-        let (exit_code, stdout, stderr) = with_env_var(super::COSIGN_BIN_ENV, script_path.as_os_str(), || {
-            run_command(
-                [
-                    "ai-catalog-cli",
-                    "oci",
-                    "export-layout",
-                    "--cosign-key",
-                    "fake.key",
-                    "--tag",
-                    "demo",
-                    "-",
-                    layout_dir.to_str().expect("path should be utf-8"),
-                ],
-                fixture,
-            )
-        });
+        let (exit_code, stdout, stderr) =
+            with_env_var(super::COSIGN_BIN_ENV, script_path.as_os_str(), || {
+                run_command(
+                    [
+                        "ai-catalog-cli",
+                        "oci",
+                        "export-layout",
+                        "--cosign-key",
+                        "fake.key",
+                        "--tag",
+                        "demo",
+                        "-",
+                        layout_dir.to_str().expect("path should be utf-8"),
+                    ],
+                    fixture,
+                )
+            });
 
         assert_eq!(exit_code, 0);
         assert!(stdout.contains("attached Cosign verification artifacts for 1 trust manifest(s)"));
@@ -2097,12 +2121,45 @@ mod tests {
         let script_path = dir.join("fake-cosign.sh");
         let mut file = fs::File::create(&script_path).expect("script should be creatable");
 
-        write!(
-            file,
-            "{}",
-            "#!/bin/sh\nset -eu\ncmd=\"$1\"\nshift\ncase \"$cmd\" in\n  public-key)\n    echo '-----BEGIN PUBLIC KEY-----'\n    echo 'RkFLRUNPU0lHTlBVQkxJQ0tFWQ=='\n    echo '-----END PUBLIC KEY-----'\n    ;;\n  sign-blob)\n    bundle=''\n    while [ $# -gt 0 ]; do\n      case \"$1\" in\n        --bundle)\n          bundle=\"$2\"\n          shift 2\n          ;;\n        --key)\n          shift 2\n          ;;\n        --yes)\n          shift 1\n          ;;\n        *)\n          shift 1\n          ;;\n      esac\n    done\n    printf '{\"mediaType\":\"application/vnd.dev.sigstore.bundle.v0.3+json\",\"messageSignature\":{\"signature\":\"fake-cosign-signature\"}}' > \"$bundle\"\n    ;;\n  *)\n    echo \"unexpected cosign command: $cmd\" >&2\n    exit 1\n    ;;\nesac"
-        )
-        .expect("script should be writable");
+        file.write_all(
+                        br#"#!/bin/sh
+set -eu
+cmd="$1"
+shift
+case "$cmd" in
+    public-key)
+        echo '-----BEGIN PUBLIC KEY-----'
+        echo 'RkFLRUNPU0lHTlBVQkxJQ0tFWQ=='
+        echo '-----END PUBLIC KEY-----'
+        ;;
+    sign-blob)
+        bundle=''
+        while [ $# -gt 0 ]; do
+            case "$1" in
+                --bundle)
+                    bundle="$2"
+                    shift 2
+                    ;;
+                --key)
+                    shift 2
+                    ;;
+                --yes)
+                    shift 1
+                    ;;
+                *)
+                    shift 1
+                    ;;
+            esac
+        done
+        printf '{"mediaType":"application/vnd.dev.sigstore.bundle.v0.3+json","messageSignature":{"signature":"fake-cosign-signature"}}' > "$bundle"
+        ;;
+    *)
+        echo "unexpected cosign command: $cmd" >&2
+        exit 1
+        ;;
+esac"#,
+                )
+                .expect("script should be writable");
 
         let mut permissions = fs::metadata(&script_path)
             .expect("script metadata should exist")
