@@ -29,5 +29,5 @@ The demo intentionally uses temporary files and directories so it can be rerun
 without cleaning up repository state. The AI Catalog JSON round-trip still only
 contains catalog and trust-manifest data; the detached Cosign signature and
 public key remain attached as OCI referrer artifacts in the layout. The script
-uses `python3` only to select the correct referrer and blob digests from the
-JSON returned by ORAS.
+uses ORAS go-template output and bash helpers to select the correct referrer and
+blob digests.
