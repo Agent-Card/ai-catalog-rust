@@ -2,6 +2,11 @@
 
 Rust toolkit for the AI Catalog specification.
 
+Upstream references:
+
+- AI Catalog repository: <https://github.com/Agent-Card/ai-catalog>
+- Published specification: <https://agent-card.github.io/ai-catalog/>
+
 The workspace is intended to land as `agntcy/ai-catalog-rust` and starts with
 the first useful slice: parse, serialize, and validate static AI Catalog
 documents against the current specification.
