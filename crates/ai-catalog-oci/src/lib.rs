@@ -20,6 +20,15 @@ pub const OCI_REF_NAME_ANNOTATION: &str = "org.opencontainers.image.ref.name";
 pub const TRUST_MANIFEST_ARTIFACT_TYPE: &str = "application/vnd.ai-catalog.trust-manifest.v1+json";
 pub const TRUST_MANIFEST_CONFIG_MEDIA_TYPE: &str =
     "application/vnd.ai-catalog.trust-manifest.config.v1+json";
+pub const COSIGN_SIGNATURE_ARTIFACT_TYPE: &str = "application/vnd.ai-catalog.cosign.signature.v1";
+pub const COSIGN_SIGNATURE_CONFIG_MEDIA_TYPE: &str =
+    "application/vnd.ai-catalog.cosign.signature.config.v1+json";
+pub const COSIGN_SIGNATURE_LAYER_MEDIA_TYPE: &str = "application/vnd.dev.sigstore.cosign.signature";
+pub const COSIGN_PUBLIC_KEY_ARTIFACT_TYPE: &str = "application/vnd.ai-catalog.cosign.public-key.v1";
+pub const COSIGN_PUBLIC_KEY_CONFIG_MEDIA_TYPE: &str =
+    "application/vnd.ai-catalog.cosign.public-key.config.v1+json";
+pub const COSIGN_PUBLIC_KEY_LAYER_MEDIA_TYPE: &str =
+    "application/vnd.dev.sigstore.cosign.public-key";
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -51,6 +60,8 @@ pub enum Error {
     MissingLayoutReference(String),
     #[error("OCI layout contains multiple ai-catalog root references; pass an explicit ref name")]
     AmbiguousLayoutReference,
+    #[error("missing OCI subject descriptor for digest '{0}'")]
+    MissingSubjectDescriptor(String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -134,6 +145,22 @@ struct EntryConfig {
     url: Option<String>,
     #[serde(flatten, default)]
     extra_fields: BTreeMap<String, Value>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CosignSignatureConfig {
+    identity: String,
+    payload_digest: String,
+    payload_media_type: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CosignPublicKeyConfig {
+    identity: String,
+    payload_digest: String,
+    format: String,
 }
 
 pub fn pack_catalog(catalog: &AiCatalog) -> Result<OciArtifactSet> {
@@ -277,7 +304,11 @@ pub fn unpack_catalog(artifacts: &OciArtifactSet) -> Result<AiCatalog> {
         let trust_manifest = artifacts
             .referrers
             .get(&descriptor.digest)
-            .and_then(|items| items.first())
+            .and_then(|items| {
+                items.iter().find(|item| {
+                    item.artifact_type.as_deref() == Some(TRUST_MANIFEST_ARTIFACT_TYPE)
+                })
+            })
             .map(|referrer| {
                 let bytes = artifacts
                     .blobs
@@ -316,6 +347,96 @@ pub fn unpack_catalog(artifacts: &OciArtifactSet) -> Result<AiCatalog> {
         metadata,
         extra_fields,
     })
+}
+
+pub fn attach_cosign_verification_artifacts(
+    artifacts: &mut OciArtifactSet,
+    subject_digest: &str,
+    identity: &str,
+    payload_digest: &str,
+    signature: &[u8],
+    public_key: &[u8],
+) -> Result<()> {
+    let subject = artifacts
+        .index
+        .manifests
+        .iter()
+        .find(|descriptor| descriptor.digest == subject_digest)
+        .cloned()
+        .ok_or_else(|| Error::MissingSubjectDescriptor(subject_digest.to_owned()))?;
+
+    let signature_config = CosignSignatureConfig {
+        identity: identity.to_owned(),
+        payload_digest: payload_digest.to_owned(),
+        payload_media_type: TRUST_MANIFEST_ARTIFACT_TYPE.to_owned(),
+    };
+    let signature_config_bytes = serde_json::to_vec(&signature_config)?;
+    let signature_config_descriptor = store_blob(
+        &mut artifacts.blobs,
+        &signature_config_bytes,
+        COSIGN_SIGNATURE_CONFIG_MEDIA_TYPE,
+        None,
+        BTreeMap::new(),
+    );
+    let signature_layer_descriptor = store_blob(
+        &mut artifacts.blobs,
+        signature,
+        COSIGN_SIGNATURE_LAYER_MEDIA_TYPE,
+        None,
+        BTreeMap::new(),
+    );
+    let signature_manifest = OciImageManifest {
+        schema_version: 2,
+        media_type: OCI_IMAGE_MANIFEST_MEDIA_TYPE.to_owned(),
+        artifact_type: Some(COSIGN_SIGNATURE_ARTIFACT_TYPE.to_owned()),
+        config: signature_config_descriptor,
+        layers: vec![signature_layer_descriptor],
+        subject: Some(subject.clone()),
+        annotations: cosign_signature_annotations(identity, payload_digest),
+    };
+
+    let public_key_config = CosignPublicKeyConfig {
+        identity: identity.to_owned(),
+        payload_digest: payload_digest.to_owned(),
+        format: "pem".to_owned(),
+    };
+    let public_key_config_bytes = serde_json::to_vec(&public_key_config)?;
+    let public_key_config_descriptor = store_blob(
+        &mut artifacts.blobs,
+        &public_key_config_bytes,
+        COSIGN_PUBLIC_KEY_CONFIG_MEDIA_TYPE,
+        None,
+        BTreeMap::new(),
+    );
+    let public_key_layer_descriptor = store_blob(
+        &mut artifacts.blobs,
+        public_key,
+        COSIGN_PUBLIC_KEY_LAYER_MEDIA_TYPE,
+        None,
+        BTreeMap::new(),
+    );
+    let public_key_manifest = OciImageManifest {
+        schema_version: 2,
+        media_type: OCI_IMAGE_MANIFEST_MEDIA_TYPE.to_owned(),
+        artifact_type: Some(COSIGN_PUBLIC_KEY_ARTIFACT_TYPE.to_owned()),
+        config: public_key_config_descriptor,
+        layers: vec![public_key_layer_descriptor],
+        subject: Some(subject),
+        annotations: cosign_public_key_annotations(identity, payload_digest),
+    };
+
+    artifacts
+        .referrers
+        .entry(subject_digest.to_owned())
+        .or_default()
+        .push(signature_manifest);
+    artifacts
+        .referrers
+        .entry(subject_digest.to_owned())
+        .or_default()
+        .push(public_key_manifest);
+
+    Ok(())
 }
 
 pub fn export_layout(
@@ -617,6 +738,42 @@ fn trust_manifest_annotations(manifest: &TrustManifest) -> BTreeMap<String, Stri
     BTreeMap::from([("ai-catalog.identity".to_owned(), manifest.identity.clone())])
 }
 
+fn cosign_signature_annotations(identity: &str, payload_digest: &str) -> BTreeMap<String, String> {
+    BTreeMap::from([
+        ("ai-catalog.identity".to_owned(), identity.to_owned()),
+        (
+            "ai-catalog.payloadDigest".to_owned(),
+            payload_digest.to_owned(),
+        ),
+        (
+            "ai-catalog.payloadMediaType".to_owned(),
+            TRUST_MANIFEST_ARTIFACT_TYPE.to_owned(),
+        ),
+        (
+            "ai-catalog.verificationMaterial".to_owned(),
+            "cosign-signature".to_owned(),
+        ),
+    ])
+}
+
+fn cosign_public_key_annotations(identity: &str, payload_digest: &str) -> BTreeMap<String, String> {
+    BTreeMap::from([
+        ("ai-catalog.identity".to_owned(), identity.to_owned()),
+        (
+            "ai-catalog.payloadDigest".to_owned(),
+            payload_digest.to_owned(),
+        ),
+        (
+            "ai-catalog.payloadMediaType".to_owned(),
+            TRUST_MANIFEST_ARTIFACT_TYPE.to_owned(),
+        ),
+        (
+            "ai-catalog.verificationMaterial".to_owned(),
+            "cosign-public-key".to_owned(),
+        ),
+    ])
+}
+
 fn store_blob(
     blobs: &mut BTreeMap<String, Vec<u8>>,
     bytes: &[u8],
@@ -694,9 +851,10 @@ mod tests {
     use serde_json::json;
 
     use super::{
-        AI_CATALOG_MEDIA_TYPE, ENTRY_CONFIG_MEDIA_TYPE, Error, OCI_IMAGE_INDEX_MEDIA_TYPE,
-        OCI_IMAGE_MANIFEST_MEDIA_TYPE, OCI_LAYOUT_VERSION, OCI_REF_NAME_ANNOTATION,
-        TRUST_MANIFEST_ARTIFACT_TYPE, descriptor_for_bytes, export_layout, import_layout,
+        AI_CATALOG_MEDIA_TYPE, COSIGN_PUBLIC_KEY_ARTIFACT_TYPE, COSIGN_SIGNATURE_ARTIFACT_TYPE,
+        ENTRY_CONFIG_MEDIA_TYPE, Error, OCI_IMAGE_INDEX_MEDIA_TYPE, OCI_IMAGE_MANIFEST_MEDIA_TYPE,
+        OCI_LAYOUT_VERSION, OCI_REF_NAME_ANNOTATION, TRUST_MANIFEST_ARTIFACT_TYPE,
+        attach_cosign_verification_artifacts, descriptor_for_bytes, export_layout, import_layout,
         pack_catalog, unpack_catalog,
     };
 
@@ -1025,6 +1183,97 @@ mod tests {
                 .as_deref(),
             Some(TRUST_MANIFEST_ARTIFACT_TYPE)
         );
+
+        fs::remove_dir_all(&layout_dir).expect("temp layout should be removed");
+    }
+
+    #[test]
+    fn unpacks_catalog_with_additional_cosign_referrers() {
+        let catalog = parse_str(
+            r#"{
+			  "specVersion": "1.0",
+			  "entries": [
+				{
+				  "identifier": "urn:example:inline",
+				  "displayName": "Inline Entry",
+				  "mediaType": "application/json",
+				  "data": {
+					"name": "inline"
+				  },
+				  "trustManifest": {
+					"identity": "urn:example:inline"
+				  }
+				}
+			  ]
+			}"#,
+        )
+        .expect("catalog should parse");
+        let mut artifacts = pack_catalog(&catalog).expect("catalog should pack");
+        let entry_digest = artifacts.index.manifests[0].digest.clone();
+
+        attach_cosign_verification_artifacts(
+            &mut artifacts,
+            &entry_digest,
+            "urn:example:inline",
+            "sha256:1234abcd",
+            b"cosign-signature",
+            b"-----BEGIN PUBLIC KEY-----\nZmFrZQ==\n-----END PUBLIC KEY-----\n",
+        )
+        .expect("cosign artifacts should attach");
+
+        let unpacked = unpack_catalog(&artifacts).expect("artifacts should still unpack");
+
+        assert_eq!(unpacked, catalog);
+        assert_eq!(artifacts.referrers[&entry_digest].len(), 3);
+    }
+
+    #[test]
+    fn exports_and_imports_cosign_referrers() {
+        let catalog = parse_str(
+            r#"{
+			  "specVersion": "1.0",
+			  "entries": [
+				{
+				  "identifier": "urn:example:inline",
+				  "displayName": "Inline Entry",
+				  "mediaType": "application/json",
+				  "data": {
+					"name": "inline"
+				  },
+				  "trustManifest": {
+					"identity": "urn:example:inline"
+				  }
+				}
+			  ]
+			}"#,
+        )
+        .expect("catalog should parse");
+        let mut artifacts = pack_catalog(&catalog).expect("catalog should pack");
+        let entry_digest = artifacts.index.manifests[0].digest.clone();
+        let layout_dir = unique_temp_dir("ai-catalog-layout-cosign-referrers");
+
+        attach_cosign_verification_artifacts(
+            &mut artifacts,
+            &entry_digest,
+            "urn:example:inline",
+            "sha256:1234abcd",
+            b"cosign-signature",
+            b"-----BEGIN PUBLIC KEY-----\nZmFrZQ==\n-----END PUBLIC KEY-----\n",
+        )
+        .expect("cosign artifacts should attach");
+
+        export_layout(&artifacts, &layout_dir, "inline").expect("layout export should succeed");
+
+        let imported =
+            import_layout(&layout_dir, Some("inline")).expect("layout import should succeed");
+        let imported_types = imported.referrers[&entry_digest]
+            .iter()
+            .filter_map(|manifest| manifest.artifact_type.as_deref())
+            .collect::<Vec<_>>();
+
+        assert!(imported_types.contains(&TRUST_MANIFEST_ARTIFACT_TYPE));
+        assert!(imported_types.contains(&COSIGN_SIGNATURE_ARTIFACT_TYPE));
+        assert!(imported_types.contains(&COSIGN_PUBLIC_KEY_ARTIFACT_TYPE));
 
         fs::remove_dir_all(&layout_dir).expect("temp layout should be removed");
     }
