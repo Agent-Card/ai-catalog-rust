@@ -73,6 +73,11 @@ is encrypted, provide the password non-interactively through `COSIGN_PASSWORD`.
 
 ## Demo
 
+The walkthrough requires `cargo`, `oras`, and `cosign` on `PATH`. `just` is
+optional. On macOS and Linux, use the Bash walkthrough. On Windows, use the
+PowerShell walkthrough in `demo/oci-layout-walkthrough.ps1`. See
+`demo/oci-layout-walkthrough.md` for the prerequisite commands.
+
 Run the end-to-end OCI walkthrough with:
 
 ```sh

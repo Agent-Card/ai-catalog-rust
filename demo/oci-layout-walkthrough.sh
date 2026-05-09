@@ -10,6 +10,7 @@ COSIGN_BIN="${COSIGN_BIN:-cosign}"
 
 : "${COSIGN_PASSWORD:=}"
 export COSIGN_PASSWORD
+export AI_CATALOG_ORAS_BIN="$ORAS_BIN"
 export AI_CATALOG_COSIGN_BIN="$COSIGN_BIN"
 
 TRUST_MANIFEST_ARTIFACT_TYPE="application/vnd.ai-catalog.trust-manifest.v1+json"
@@ -36,6 +37,7 @@ assert_discovery_contains_verification_material() {
 
 require_tool "$ORAS_BIN"
 require_tool "$COSIGN_BIN"
+require_tool cargo
 
 compact_json() {
   local payload="$1"
