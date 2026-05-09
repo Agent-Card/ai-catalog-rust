@@ -4,6 +4,8 @@
 default:
 	@just --list
 
+set windows-shell := ["powershell", "-NoLogo", "-NoProfile", "-Command"]
+
 demo_oci_layout_command := if os_family() == "windows" {
 	"powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File ./demo/oci-layout-walkthrough.ps1"
 } else {
