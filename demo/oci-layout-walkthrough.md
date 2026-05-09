@@ -5,10 +5,62 @@ catalog that contains an inline entry and a trust manifest. It now also uses
 Cosign to generate a temporary signing keypair and stores detached signature and
 public-key verification artifacts alongside the trust manifest in the OCI layout.
 
+## Prerequisites
+
+The walkthrough requires:
+
+- a Bash-compatible shell on macOS or Linux, or PowerShell on Windows
+- Rust with `cargo` on `PATH`
+- ORAS CLI on `PATH`
+- Cosign CLI on `PATH`
+
+`just` is optional, but it is the documented entry point for repository tasks.
+
+### macOS
+
+Install the dependencies before running the demo:
+
+```sh
+brew install rust oras cosign just
+```
+
+### Linux
+
+Install Rust with Rustup, then install ORAS, Cosign, and optionally `just`
+using your distro package manager or the upstream release binaries:
+
+- Rust: https://www.rust-lang.org/tools/install
+- ORAS: https://oras.land/docs/installation
+- Cosign: https://docs.sigstore.dev/cosign/system_config/installation/
+- just: https://just.systems/man/en/packages.html
+
+### Windows
+
+Install these dependencies before running the PowerShell walkthrough:
+
+```powershell
+winget install --id Rustlang.Rustup --exact
+winget install --id ORASProject.ORAS --exact
+winget install --id Sigstore.Cosign --exact
+winget install --id Casey.Just --exact
+```
+
+Open a new terminal after installation so `cargo`, `oras`, `cosign`, and
+`just` are available on `PATH`.
+
+Current upstream ORAS and Cosign Windows release assets are `amd64`, so Windows
+ARM64 users should prefer WSL or x64 emulation for this walkthrough.
+
 Run it with:
 
 ```sh
 just demo-oci-layout
+```
+
+On Windows PowerShell, use:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\demo\oci-layout-walkthrough.ps1
 ```
 
 The script performs these steps:
