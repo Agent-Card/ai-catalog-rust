@@ -64,7 +64,7 @@ async fn pull_from_url(url: &str, output_path: Option<&str>, cache: &CacheManage
     Ok(())
 }
 
-async fn write_entry(
+pub(crate) async fn write_entry(
     entry: &CatalogEntry,
     output_path: Option<&str>,
     cache: &CacheManager,

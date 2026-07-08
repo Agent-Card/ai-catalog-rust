@@ -455,6 +455,10 @@ fn oci_command<R: Read, W: Write, E: Write>(
         "export-layout" => oci_export_layout_command(remaining, stdin, stdout, stderr),
         "unpack-layout" => oci_unpack_layout_command(remaining, stdout, stderr),
         "push" => oci_push_command(remaining, stdin, stdout, stderr),
+        "add" => oci_add_command(remaining, stderr),
+        "search" => oci_search_command(remaining, stderr),
+        "show" => oci_show_command(remaining, stderr),
+        "pull" => oci_pull_command(remaining, stderr),
         "help" => {
             write_usage(stdout)?;
             Ok(0)
@@ -661,6 +665,111 @@ fn oci_unpack_layout_command<W: Write, E: Write>(
     writeln!(stdout)?;
 
     Ok(0)
+}
+
+fn oci_add_command<E: Write>(args: &[String], stderr: &mut E) -> io::Result<i32> {
+    let mut name = None;
+    let mut layout_path = None;
+    let mut ref_name: Option<String> = None;
+    let mut iter = args.iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--ref-name" | "-r" => {
+                ref_name = iter.next().map(|s| s.to_string());
+            }
+            s if !s.starts_with('-') => {
+                if name.is_none() {
+                    name = Some(s.to_string());
+                } else {
+                    layout_path = Some(s.to_string());
+                }
+            }
+            _ => {}
+        }
+    }
+    let (Some(name), Some(layout_path)) = (name, layout_path) else {
+        writeln!(stderr, "usage: {BIN_NAME} oci add <name> <layout-dir> [--ref-name <tag>]")?;
+        return Ok(2);
+    };
+    match run_consumer(commands::oci_add::execute(&name, &layout_path, ref_name.as_deref())) {
+        Ok(()) => Ok(0),
+        Err(e) => consumer_error_to_io(e, stderr),
+    }
+}
+
+fn oci_search_command<E: Write>(args: &[String], stderr: &mut E) -> io::Result<i32> {
+    let mut keyword = None;
+    let mut use_regex = false;
+    let mut limit = 50usize;
+    let mut is_json = false;
+    let mut iter = args.iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--regex" | "-r" => use_regex = true,
+            "--json" | "-j" => is_json = true,
+            "-n" | "--limit" => {
+                if let Some(v) = iter.next() {
+                    limit = v.parse().unwrap_or(limit);
+                }
+            }
+            s if !s.starts_with('-') => keyword = Some(s.to_string()),
+            _ => {}
+        }
+    }
+    let Some(keyword) = keyword else {
+        writeln!(stderr, "usage: {BIN_NAME} oci search [--regex] [-n <limit>] [--json] <keyword>")?;
+        return Ok(2);
+    };
+    let fmt = if is_json { commands::OutputFormat::Json } else { commands::OutputFormat::Table };
+    match run_consumer(commands::oci_search::execute(&keyword, use_regex, limit, fmt)) {
+        Ok(()) => Ok(0),
+        Err(e) => consumer_error_to_io(e, stderr),
+    }
+}
+
+fn oci_show_command<E: Write>(args: &[String], stderr: &mut E) -> io::Result<i32> {
+    let mut identifier = None;
+    let mut is_json = false;
+    let mut iter = args.iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--json" | "-j" => is_json = true,
+            s if !s.starts_with('-') => identifier = Some(s.to_string()),
+            _ => {}
+        }
+    }
+    let Some(identifier) = identifier else {
+        writeln!(stderr, "usage: {BIN_NAME} oci show [--json] <identifier>")?;
+        return Ok(2);
+    };
+    let fmt = if is_json { commands::OutputFormat::Json } else { commands::OutputFormat::Table };
+    match run_consumer(commands::oci_show::execute(&identifier, fmt)) {
+        Ok(()) => Ok(0),
+        Err(e) => consumer_error_to_io(e, stderr),
+    }
+}
+
+fn oci_pull_command<E: Write>(args: &[String], stderr: &mut E) -> io::Result<i32> {
+    let mut identifier = None;
+    let mut output_path: Option<String> = None;
+    let mut iter = args.iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--output" | "-o" => {
+                output_path = iter.next().map(|s| s.to_string());
+            }
+            s if !s.starts_with('-') => identifier = Some(s.to_string()),
+            _ => {}
+        }
+    }
+    let Some(identifier) = identifier else {
+        writeln!(stderr, "usage: {BIN_NAME} oci pull [--output <path>] <identifier>")?;
+        return Ok(2);
+    };
+    match run_consumer(commands::oci_pull::execute(&identifier, output_path.as_deref())) {
+        Ok(()) => Ok(0),
+        Err(e) => consumer_error_to_io(e, stderr),
+    }
 }
 
 fn oci_push_command<R: Read, W: Write, E: Write>(
@@ -1189,6 +1298,10 @@ fn write_usage(writer: &mut impl Write) -> io::Result<()> {
     writeln!(writer, "  {BIN_NAME} oci export-layout [--tag <tag>] [--cosign-key <path>] [--cosign-public-key <path>] <path|-> <layout-dir>")?;
     writeln!(writer, "  {BIN_NAME} oci unpack-layout [--ref-name <name>] <layout-dir>")?;
     writeln!(writer, "  {BIN_NAME} oci push [--tag <tag>] [--plain-http] [--insecure] [--to-oci-layout-path <layout-dir>] [--cosign-key <path>] [--cosign-public-key <path>] <path|-> <target>")?;
+    writeln!(writer, "  {BIN_NAME} oci add <name> <layout-dir> [--ref-name <tag>]")?;
+    writeln!(writer, "  {BIN_NAME} oci search [--regex] [-n <limit>] [--json] <keyword>")?;
+    writeln!(writer, "  {BIN_NAME} oci show [--json] <identifier>")?;
+    writeln!(writer, "  {BIN_NAME} oci pull [--output <path>] <identifier>")?;
     writeln!(writer, "  {BIN_NAME} catalog add <name> <url>")?;
     writeln!(writer, "  {BIN_NAME} catalog list [--json]")?;
     writeln!(writer, "  {BIN_NAME} catalog remove <name-or-url>")?;

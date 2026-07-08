@@ -224,5 +224,52 @@ run_cli catalog remove demo-registry
 step "21. List catalogs after removal"
 run_cli catalog list
 
-step "Consumer walkthrough complete"
+# ── OCI storage path ─────────────────────────────────────────────────────────
+# The following steps show the same catalog going through an OCI image layout
+# instead of the plain-HTTP / file:// CAS path above.
+
+oci_layout_dir="$tmp_root/oci-layout"
+oci_pull_dir="$tmp_root/oci-pulled"
+mkdir -p "$oci_pull_dir"
+
+step "22. Export the catalog to a standard OCI image layout (no signing required)"
+run_cli oci export-layout --tag consumer-demo "$root_catalog_path" "$oci_layout_dir"
+
+step "23. Register the catalog from the OCI layout (oci add)"
+run_cli oci add demo-oci "$oci_layout_dir" --ref-name consumer-demo
+
+step "24. List all registered catalogs — shows both CAS and OCI sources"
+run_cli catalog list
+
+step "25. Search only OCI-sourced entries by keyword"
+run_cli oci search agent
+
+step "26. Search OCI entries with JSON output"
+run_cli oci search --json nlp
+
+step "27. Show OCI-sourced entry details (text)"
+run_cli oci show urn:demo:agent:conversational-v1
+
+step "28. Show OCI-sourced entry details (JSON)"
+run_cli oci show --json urn:demo:model:embeddings-v2
+
+step "29. Pull inline-data OCI entry to disk"
+run_cli oci pull --output "$oci_pull_dir" urn:demo:config:default-settings
+echo "pulled file:"
+cat "$oci_pull_dir/default-settings.json"
+
+step "30. Compare: regular search finds CAS + OCI entries; oci search finds only OCI"
+# Re-register the CAS catalog so both sources are in the registry
+run_cli catalog add demo-registry "file://$root_catalog_path"
+echo
+echo "catalog list now shows two sources:"
+run_cli catalog list
+echo
+echo "--- oci search embeddings (OCI only: 1 catalog) ---"
+run_cli oci search --json embeddings | python3 -c "import sys,json; [print(' •', e['identifier']) for e in json.load(sys.stdin).get('entries',[])]"
+echo
+echo "--- search embeddings (all sources: CAS + OCI combined) ---"
+run_cli search --json embeddings | python3 -c "import sys,json; [print(' •', e['identifier']) for e in json.load(sys.stdin).get('entries',[])]"
+
+step "Consumer + OCI walkthrough complete"
 echo "all temporary files were cleaned up from $tmp_root"

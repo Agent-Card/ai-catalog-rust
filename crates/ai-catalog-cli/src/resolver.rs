@@ -415,6 +415,77 @@ fn search_catalog_for_id(
     None
 }
 
+// ── OCI-scoped queries ────────────────────────────────────────────────────────
+
+/// Resolve entries only from OCI-sourced catalogs (those added via `oci add`).
+/// Registry entries for OCI catalogs carry an `urn:ai-catalog:oci:` identifier prefix.
+pub async fn resolve_local_oci(cache: &CacheManager) -> Result<Vec<ResolvedEntry>> {
+    let registry = cache.read_registry()?;
+    let url_to_hash = cache.read_refs()?;
+    let mut visited: HashSet<String> = HashSet::new();
+    let mut entries = Vec::new();
+
+    for entry in &registry.entries {
+        if !entry.identifier.starts_with("urn:ai-catalog:oci:") {
+            continue;
+        }
+        if let Some(url) = &entry.url {
+            if visited.contains(url) {
+                continue;
+            }
+            visited.insert(url.clone());
+            let path = url.strip_prefix("file://").unwrap_or(url);
+            if let Ok(bytes) = std::fs::read(path) {
+                if let Ok(catalog) = serde_json::from_slice::<AiCatalog>(&bytes) {
+                    resolve_local_inner(
+                        &catalog,
+                        url,
+                        0,
+                        &url_to_hash,
+                        &mut visited,
+                        &mut entries,
+                        cache,
+                    );
+                }
+            }
+        }
+    }
+
+    Ok(entries)
+}
+
+/// Search for an entry by identifier within OCI-sourced catalogs only.
+pub fn find_entry_by_id_oci(id: &str, cache: &CacheManager) -> Result<Option<CatalogEntry>> {
+    let registry = cache.read_registry()?;
+    let url_to_hash = cache.read_refs()?;
+    let mut visited = HashSet::new();
+
+    for entry in &registry.entries {
+        if !entry.identifier.starts_with("urn:ai-catalog:oci:") {
+            continue;
+        }
+        if let Some(url) = &entry.url {
+            if visited.contains(url) {
+                continue;
+            }
+            visited.insert(url.clone());
+            let path = url.strip_prefix("file://").unwrap_or(url);
+            if let Ok(bytes) = std::fs::read(path) {
+                if let Ok(catalog) = serde_json::from_slice::<AiCatalog>(&bytes) {
+                    let mut sub_visited = visited.clone();
+                    if let Some(found) =
+                        search_catalog_for_id(&catalog, id, &url_to_hash, &mut sub_visited, 0, cache)
+                    {
+                        return Ok(Some(found));
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(None)
+}
+
 /// Retrieve a `serde_json::Value` metadata object for a registry entry.
 pub fn make_entry_metadata(source_url: &str, hash: &str, entry_count: usize) -> serde_json::Value {
     json!({

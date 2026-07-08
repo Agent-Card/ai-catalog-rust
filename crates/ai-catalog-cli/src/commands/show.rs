@@ -72,7 +72,7 @@ fn find_entry_in_scope(
     find_entry_by_id_in_url(identifier, file_url, cache)
 }
 
-fn print_entry_table(entry: &CatalogEntry, cache: &CacheManager) {
+pub(crate) fn print_entry_table(entry: &CatalogEntry, cache: &CacheManager) {
     println!("{}", "─".repeat(60));
     println!(
         "  {}  {}",
