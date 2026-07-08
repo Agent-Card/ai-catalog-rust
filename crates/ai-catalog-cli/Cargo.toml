@@ -9,11 +9,26 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
+[[bin]]
+name = "ai-catalog"
+path = "src/main.rs"
+
 [dependencies]
 ai-catalog = { path = "../ai-catalog" }
 ai-catalog-oci = { path = "../ai-catalog-oci" }
 ai-catalog-trust = { path = "../ai-catalog-trust" }
 ai-catalog-validate = { path = "../ai-catalog-validate" }
+async-recursion.workspace = true
+chrono.workspace = true
+clap.workspace = true
+colored.workspace = true
+dirs.workspace = true
+hex.workspace = true
+regex.workspace = true
+reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+url.workspace = true

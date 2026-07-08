@@ -9,7 +9,7 @@ use serde_json::Value;
 
 #[test]
 fn binary_help_succeeds() {
-    let output = Command::new(env!("CARGO_BIN_EXE_ai-catalog-cli"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ai-catalog"))
         .arg("help")
         .output()
         .expect("help command should run");
@@ -30,7 +30,7 @@ fn binary_validate_json_from_stdin_succeeds() {
         env!("CARGO_MANIFEST_DIR")
     ))
     .expect("fixture should be readable");
-    let mut child = Command::new(env!("CARGO_BIN_EXE_ai-catalog-cli"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_ai-catalog"))
         .args(["validate", "--json", "-"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -64,7 +64,7 @@ fn binary_oci_pack_from_stdin_succeeds() {
         env!("CARGO_MANIFEST_DIR")
     ))
     .expect("fixture should be readable");
-    let mut child = Command::new(env!("CARGO_BIN_EXE_ai-catalog-cli"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_ai-catalog"))
         .args(["oci", "pack", "-"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
