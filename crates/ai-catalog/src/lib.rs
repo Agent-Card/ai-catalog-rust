@@ -70,7 +70,7 @@ mod tests {
         assert_eq!(catalog.spec_version, "1.0");
         assert_eq!(catalog.entries.len(), 2);
         assert_eq!(
-            catalog.host.as_ref().map(|host| host.display_name.as_str()),
+            catalog.host.as_ref().and_then(|host| host.display_name.as_deref()),
             Some("Acme Services Inc."),
         );
 

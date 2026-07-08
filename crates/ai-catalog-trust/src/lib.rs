@@ -405,7 +405,7 @@ mod tests {
 				{
 				  "identifier": "urn:example:agent",
 				  "displayName": "Example Agent",
-				  "mediaType": "application/json",
+				  "type": "application/json",
 				  "url": "https://example.com/agent.json",
 				  "trustManifest": {
 					"identity": "urn:example:agent",
@@ -449,7 +449,7 @@ mod tests {
 				{
 				  "identifier": "urn:example:artifact",
 				  "displayName": "Artifact",
-				  "mediaType": "application/json",
+				  "type": "application/json",
 				  "url": "https://example.com/artifact.json",
 				  "trustManifest": {
 					"identity": "plain-identifier",
@@ -533,7 +533,7 @@ mod tests {
 				{
 				  "identifier": "urn:example:artifact",
 				  "displayName": "Artifact",
-				  "mediaType": "application/json",
+				  "type": "application/json",
 				  "url": "https://example.com/artifact.json",
 				  "trustManifest": {
 					"identity": "urn:example:artifact",

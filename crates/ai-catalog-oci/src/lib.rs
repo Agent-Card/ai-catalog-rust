@@ -128,7 +128,8 @@ struct OciLayoutMetadata {
 #[serde(rename_all = "camelCase")]
 struct EntryConfig {
     identifier: String,
-    display_name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    display_name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     description: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -187,7 +188,7 @@ pub fn pack_catalog(catalog: &AiCatalog) -> Result<OciArtifactSet> {
                 vec![store_blob(
                     &mut blobs,
                     &layer_bytes,
-                    &entry.media_type,
+                    &entry.entry_type,
                     None,
                     BTreeMap::new(),
                 )]
@@ -199,7 +200,7 @@ pub fn pack_catalog(catalog: &AiCatalog) -> Result<OciArtifactSet> {
         let manifest = OciImageManifest {
             schema_version: 2,
             media_type: OCI_IMAGE_MANIFEST_MEDIA_TYPE.to_owned(),
-            artifact_type: Some(entry.media_type.clone()),
+            artifact_type: Some(entry.entry_type.clone()),
             config: config_descriptor,
             layers,
             subject: None,
@@ -208,7 +209,7 @@ pub fn pack_catalog(catalog: &AiCatalog) -> Result<OciArtifactSet> {
         let manifest_descriptor = descriptor_for_bytes(
             &serde_json::to_vec(&manifest)?,
             OCI_IMAGE_MANIFEST_MEDIA_TYPE,
-            Some(entry.media_type.clone()),
+            Some(entry.entry_type.clone()),
             entry_annotations,
         );
 
@@ -322,7 +323,7 @@ pub fn unpack_catalog(artifacts: &OciArtifactSet) -> Result<AiCatalog> {
         entries.push(CatalogEntry {
             identifier: config.identifier,
             display_name: config.display_name,
-            media_type: descriptor
+            entry_type: descriptor
                 .artifact_type
                 .clone()
                 .or_else(|| manifest.artifact_type.clone())
@@ -722,10 +723,9 @@ fn entry_annotations(entry: &CatalogEntry) -> BTreeMap<String, String> {
     let mut annotations = BTreeMap::new();
 
     annotations.insert("ai-catalog.identifier".to_owned(), entry.identifier.clone());
-    annotations.insert(
-        "ai-catalog.displayName".to_owned(),
-        entry.display_name.clone(),
-    );
+    if let Some(display_name) = &entry.display_name {
+        annotations.insert("ai-catalog.displayName".to_owned(), display_name.clone());
+    }
 
     if let Some(version) = &entry.version {
         annotations.insert("ai-catalog.version".to_owned(), version.clone());
@@ -889,7 +889,7 @@ mod tests {
 				{
 				  "identifier": "urn:example:inline",
 				  "displayName": "Inline Entry",
-				  "mediaType": "application/json",
+				  "type": "application/json",
 				  "data": {
 					"name": "inline"
 				  },
@@ -927,7 +927,7 @@ mod tests {
 				{
 				  "identifier": "urn:example:missing",
 				  "displayName": "Missing",
-				  "mediaType": "application/json"
+				  "type": "application/json"
 				}
 			  ]
 			}"#,
@@ -955,7 +955,7 @@ mod tests {
                     {
                         "identifier": "urn:example:url",
                         "displayName": "External Entry",
-                        "mediaType": "application/json",
+                        "type": "application/json",
                         "url": "https://example.com/entry.json"
                     }
                 ]
@@ -1048,7 +1048,7 @@ mod tests {
 				{
 				  "identifier": "urn:example:inline",
 				  "displayName": "Inline Entry",
-				  "mediaType": "application/json",
+				  "type": "application/json",
 				  "data": {
 					"name": "inline"
 				  },
@@ -1155,7 +1155,7 @@ mod tests {
 				{
 				  "identifier": "urn:example:inline",
 				  "displayName": "Inline Entry",
-				  "mediaType": "application/json",
+				  "type": "application/json",
 				  "data": {
 					"name": "inline"
 				  },
@@ -1196,7 +1196,7 @@ mod tests {
 				{
 				  "identifier": "urn:example:inline",
 				  "displayName": "Inline Entry",
-				  "mediaType": "application/json",
+				  "type": "application/json",
 				  "data": {
 					"name": "inline"
 				  },
@@ -1236,7 +1236,7 @@ mod tests {
 				{
 				  "identifier": "urn:example:inline",
 				  "displayName": "Inline Entry",
-				  "mediaType": "application/json",
+				  "type": "application/json",
 				  "data": {
 					"name": "inline"
 				  },

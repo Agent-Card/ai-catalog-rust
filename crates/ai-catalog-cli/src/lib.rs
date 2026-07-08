@@ -1622,7 +1622,7 @@ mod tests {
         {
             "identifier": "urn:example:model",
             "displayName": "Example Model",
-            "mediaType": "application/json",
+            "type": "application/json",
             "url": "https://example.com/model.json",
             "data": {}
         }
@@ -1645,7 +1645,7 @@ mod tests {
         {
             "identifier": "urn:example:model",
             "displayName": "Example Model",
-            "mediaType": "application/json",
+            "type": "application/json",
             "url": "https://example.com/model.json",
             "data": {}
         }
@@ -1750,7 +1750,7 @@ mod tests {
         {
             "identifier": "urn:example:model",
             "displayName": "Example Model",
-            "mediaType": "application/json",
+            "type": "application/json",
             "url": "https://example.com/model.json",
             "trustManifest": {
                 "identity": "plain-identifier",
@@ -1865,7 +1865,7 @@ mod tests {
         {
             "identifier": "urn:example:model",
             "displayName": "Example Model",
-            "mediaType": "application/json",
+            "type": "application/json",
             "data": { "name": "example" },
             "trustManifest": {
                 "identity": "urn:example:model"

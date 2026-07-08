@@ -205,7 +205,7 @@ fn validate_entry(
         }
     }
 
-    if entry.media_type == "application/ai-catalog+json" {
+    if entry.entry_type == "application/ai-catalog+json" {
         if depth >= MAX_NESTING_DEPTH {
             push_error(
                 errors,
@@ -344,7 +344,7 @@ mod tests {
                 {
                   "identifier": "urn:example:test",
                   "displayName": "Test",
-                  "mediaType": "application/json",
+                  "type": "application/json",
                   "url": "https://example.com/test.json",
                   "data": {"key": "value"}
                 }
@@ -372,13 +372,13 @@ mod tests {
                 {
                   "identifier": "urn:example:test",
                   "displayName": "First",
-                  "mediaType": "application/json",
+                  "type": "application/json",
                   "url": "https://example.com/one.json"
                 },
                 {
                   "identifier": "urn:example:test",
                   "displayName": "Second",
-                  "mediaType": "application/json",
+                  "type": "application/json",
                   "url": "https://example.com/two.json"
                 }
               ]
@@ -406,7 +406,7 @@ mod tests {
                 {
                   "identifier": "urn:example:test",
                   "displayName": "Test",
-                  "mediaType": "application/json",
+                  "type": "application/json",
                   "url": "https://example.com/test.json",
                   "trustManifest": {
                     "identity": "urn:example:other"
@@ -435,7 +435,7 @@ mod tests {
                 {
                     "identifier": "urn:example:minimal",
                     "displayName": "Minimal",
-                    "mediaType": "application/json",
+                    "type": "application/json",
                     "url": "https://example.com/minimal.json"
                 }
             ]
@@ -456,7 +456,7 @@ mod tests {
                 {
                     "identifier": "urn:example:trusted",
                     "displayName": "Trusted",
-                    "mediaType": "application/json",
+                    "type": "application/json",
                     "url": "https://example.com/trusted.json",
                     "trustManifest": {
                         "identity": "urn:example:trusted"
@@ -477,14 +477,14 @@ mod tests {
                 {
                     "identifier": "urn:example:versioned",
                     "displayName": "First",
-                    "mediaType": "application/json",
+                    "type": "application/json",
                     "url": "https://example.com/one.json",
                     "version": "1.0.0"
                 },
                 {
                     "identifier": "urn:example:versioned",
                     "displayName": "Second",
-                    "mediaType": "application/json",
+                    "type": "application/json",
                     "url": "https://example.com/two.json",
                     "version": "1.0.0"
                 }
@@ -507,13 +507,13 @@ mod tests {
                 {
                     "identifier": "urn:example:mixed",
                     "displayName": "Unversioned",
-                    "mediaType": "application/json",
+                    "type": "application/json",
                     "url": "https://example.com/unversioned.json"
                 },
                 {
                     "identifier": "urn:example:mixed",
                     "displayName": "Versioned",
-                    "mediaType": "application/json",
+                    "type": "application/json",
                     "url": "https://example.com/versioned.json",
                     "version": "1.0.0"
                 }
@@ -536,7 +536,7 @@ mod tests {
                 {
                     "identifier": "urn:example:missing-payload",
                     "displayName": "Missing Payload",
-                    "mediaType": "application/json"
+                    "type": "application/json"
                 }
             ]
         }));
@@ -557,7 +557,7 @@ mod tests {
                 {
                     "identifier": "plain-identifier",
                     "displayName": "Plain Identifier",
-                    "mediaType": "application/json",
+                    "type": "application/json",
                     "url": "https://example.com/plain.json",
                     "updatedAt": "yesterday"
                 }
@@ -588,7 +588,7 @@ mod tests {
                 {
                     "identifier": "urn:example:metadata",
                     "displayName": "Metadata",
-                    "mediaType": "application/json",
+                    "type": "application/json",
                     "url": "https://example.com/metadata.json",
                     "metadata": {
                         "": 1
@@ -668,14 +668,14 @@ mod tests {
                 {
                     "identifier": "urn:example:nested-root",
                     "displayName": "Nested Root",
-                    "mediaType": "application/ai-catalog+json",
+                    "type": "application/ai-catalog+json",
                     "data": {
                         "specVersion": "1.0",
                         "entries": [
                             {
                                 "identifier": "urn:example:nested-child",
                                 "displayName": "Nested Child",
-                                "mediaType": "application/json",
+                                "type": "application/json",
                                 "url": "https://example.com/nested-child.json"
                             }
                         ]
@@ -695,7 +695,7 @@ mod tests {
                 {
                     "identifier": "urn:example:bad-nested",
                     "displayName": "Bad Nested",
-                    "mediaType": "application/ai-catalog+json",
+                    "type": "application/ai-catalog+json",
                     "data": {
                         "unexpected": true
                     }
@@ -737,7 +737,7 @@ mod tests {
                     {
                         "identifier": "urn:example:leaf",
                         "displayName": "Leaf",
-                        "mediaType": "application/json",
+                        "type": "application/json",
                         "url": "https://example.com/leaf.json"
                     }
                 ]
@@ -749,7 +749,7 @@ mod tests {
                     {
                         "identifier": format!("urn:example:nested:{levels}"),
                         "displayName": format!("Nested {levels}"),
-                        "mediaType": "application/ai-catalog+json",
+                        "type": "application/ai-catalog+json",
                         "data": nested_catalog_value(levels - 1)
                     }
                 ]
