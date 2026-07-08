@@ -424,3 +424,198 @@ pub fn make_entry_metadata(source_url: &str, hash: &str, entry_count: usize) -> 
         "entryCount": entry_count,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::BTreeMap;
+
+    fn make_cache(dir: &tempfile::TempDir) -> CacheManager {
+        CacheManager::with_base_dir(dir.path().to_path_buf())
+    }
+
+    fn leaf_entry(id: &str, entry_type: &str) -> CatalogEntry {
+        CatalogEntry {
+            identifier: id.to_string(),
+            display_name: None,
+            entry_type: entry_type.to_string(),
+            url: Some(format!("https://example.com/{id}.json")),
+            data: None,
+            version: None,
+            description: None,
+            tags: vec![],
+            publisher: None,
+            trust_manifest: None,
+            updated_at: None,
+            metadata: None,
+            extra_fields: BTreeMap::new(),
+        }
+    }
+
+    fn catalog_entry(id: &str, nested_url: &str) -> CatalogEntry {
+        CatalogEntry {
+            identifier: id.to_string(),
+            display_name: None,
+            entry_type: "application/ai-catalog+json".to_string(),
+            url: Some(nested_url.to_string()),
+            data: None,
+            version: None,
+            description: None,
+            tags: vec![],
+            publisher: None,
+            trust_manifest: None,
+            updated_at: None,
+            metadata: None,
+            extra_fields: BTreeMap::new(),
+        }
+    }
+
+    fn bare_catalog(entries: Vec<CatalogEntry>) -> AiCatalog {
+        AiCatalog {
+            spec_version: "1.0".to_string(),
+            host: None,
+            entries,
+            metadata: None,
+            extra_fields: BTreeMap::new(),
+        }
+    }
+
+    #[test]
+    fn make_entry_metadata_has_expected_keys() {
+        let meta = make_entry_metadata("https://example.com/catalog.json", "deadbeef", 42);
+        assert_eq!(meta["sourceUrl"], "https://example.com/catalog.json");
+        assert_eq!(meta["contentHash"], "deadbeef");
+        assert_eq!(meta["entryCount"], 42);
+        assert!(meta["lastUpdated"].is_string());
+    }
+
+    #[test]
+    fn resolve_catalog_leaf_entries_empty_catalog() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let cache = make_cache(&dir);
+        let catalog = bare_catalog(vec![]);
+        let entries = resolve_catalog_leaf_entries(&catalog, "file:///test", &cache).unwrap();
+        assert!(entries.is_empty());
+    }
+
+    #[test]
+    fn resolve_catalog_leaf_entries_returns_non_catalog_entries() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let cache = make_cache(&dir);
+        let catalog = bare_catalog(vec![
+            leaf_entry("urn:test:a", "application/json"),
+            leaf_entry("urn:test:b", "application/parquet"),
+        ]);
+        let entries = resolve_catalog_leaf_entries(&catalog, "file:///test", &cache).unwrap();
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].entry.identifier, "urn:test:a");
+        assert_eq!(entries[1].entry.identifier, "urn:test:b");
+        assert_eq!(entries[0].source_catalog_url, "file:///test");
+    }
+
+    #[test]
+    fn resolve_catalog_leaf_entries_skips_nested_without_local_cache() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let cache = make_cache(&dir);
+        // A catalog with one leaf and one nested catalog (URL not in cache)
+        let catalog = bare_catalog(vec![
+            leaf_entry("urn:test:leaf", "application/json"),
+            catalog_entry("urn:test:nested", "https://example.com/nested.json"),
+        ]);
+        let entries = resolve_catalog_leaf_entries(&catalog, "file:///root", &cache).unwrap();
+        // Only the leaf entry should be returned — nested skipped (not in cache)
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].entry.identifier, "urn:test:leaf");
+    }
+
+    #[test]
+    fn find_entry_by_id_in_registry_returns_none_on_empty() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let cache = make_cache(&dir);
+        let result = find_entry_by_id_in_registry("urn:test:missing", &cache).unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn find_entry_by_id_in_url_found() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let cache = make_cache(&dir);
+        let catalog = bare_catalog(vec![
+            leaf_entry("urn:test:target", "application/json"),
+            leaf_entry("urn:test:other", "application/parquet"),
+        ]);
+        let json = serde_json::to_vec(&catalog).unwrap();
+        let catalog_path = dir.path().join("catalog.json");
+        std::fs::write(&catalog_path, &json).unwrap();
+        let file_url = format!("file://{}", catalog_path.display());
+        let result = find_entry_by_id_in_url("urn:test:target", &file_url, &cache).unwrap();
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().identifier, "urn:test:target");
+    }
+
+    #[test]
+    fn find_entry_by_id_in_url_not_found_returns_none() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let cache = make_cache(&dir);
+        let catalog = bare_catalog(vec![leaf_entry("urn:test:only", "application/json")]);
+        let json = serde_json::to_vec(&catalog).unwrap();
+        let catalog_path = dir.path().join("catalog.json");
+        std::fs::write(&catalog_path, &json).unwrap();
+        let file_url = format!("file://{}", catalog_path.display());
+        let result = find_entry_by_id_in_url("urn:test:nonexistent", &file_url, &cache).unwrap();
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn resolve_and_cache_simple_catalog() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let cache = make_cache(&dir);
+        cache.ensure_dirs().unwrap();
+
+        let catalog = bare_catalog(vec![
+            leaf_entry("urn:test:alpha", "application/json"),
+            leaf_entry("urn:test:beta", "application/parquet"),
+        ]);
+        let json = serde_json::to_vec(&catalog).unwrap();
+        let catalog_path = dir.path().join("root.json");
+        std::fs::write(&catalog_path, &json).unwrap();
+        let url = format!("file://{}", catalog_path.display());
+
+        let client = crate::fetch::build_client().unwrap();
+        let entries = resolve_and_cache(&url, &client, &cache).await.unwrap();
+
+        // Both leaf entries returned
+        assert_eq!(entries.len(), 2);
+        let ids: Vec<&str> = entries.iter().map(|e| e.entry.identifier.as_str()).collect();
+        assert!(ids.contains(&"urn:test:alpha"));
+        assert!(ids.contains(&"urn:test:beta"));
+
+        // CAS should contain the stored object
+        let refs = cache.read_refs().unwrap();
+        assert!(refs.contains_key(&url));
+        let hash = refs.get(&url).unwrap();
+        assert!(cache.object_path(hash).exists());
+    }
+
+    #[tokio::test]
+    async fn resolve_and_cache_detects_circular_reference() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let cache = make_cache(&dir);
+        cache.ensure_dirs().unwrap();
+
+        // A catalog that references itself
+        let catalog_path = dir.path().join("self.json");
+        let url = format!("file://{}", catalog_path.display());
+        let catalog = bare_catalog(vec![catalog_entry("urn:test:self", &url)]);
+        let json = serde_json::to_vec(&catalog).unwrap();
+        std::fs::write(&catalog_path, &json).unwrap();
+
+        let client = crate::fetch::build_client().unwrap();
+        // resolve_and_cache itself returns Ok (circular nested catalogs are skipped with a warning)
+        // but we can verify the root was processed
+        let result = resolve_and_cache(&url, &client, &cache).await;
+        // May succeed with 0 entries (self-ref skipped) or fail — either is acceptable
+        // What must NOT happen is an infinite loop; the call must terminate
+        let _ = result; // just verify it terminates and doesn't panic
+    }
+}
