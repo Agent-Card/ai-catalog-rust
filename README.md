@@ -5,78 +5,138 @@ Rust toolkit for the AI Catalog specification.
 Upstream references:
 
 - AI Catalog repository: <https://github.com/Agent-Card/ai-catalog>
-- Published specification: <https://agent-card.github.io/ai-catalog/>
-
-The workspace is intended to land as `agntcy/ai-catalog-rust` and starts with
-the first useful slice: parse, serialize, and validate static AI Catalog
-documents against the current specification.
-It may move to the AI Catalog project at some point.
+- Published specification: <https://ai-catalog.io>
 
 ## Workspace
 
-- `crates/ai-catalog` — core models plus parse and serialize helpers
-- `crates/ai-catalog-validate` — semantic validation and conformance detection
-- `crates/ai-catalog-trust` — trust-manifest analysis, digest verification, and canonicalization helpers
-- `crates/ai-catalog-oci` — AI Catalog OCI artifact-set pack/unpack plus standard OCI image layout import/export
-- `crates/ai-catalog-cli` — CLI entry point for validating and formatting catalogs
+| Crate | Description |
+|---|---|
+| `crates/ai-catalog` | Core types (`AiCatalog`, `CatalogEntry` with `"type"` field, `HostInfo`, `Publisher`, `TrustManifest`), parse/serialize helpers |
+| `crates/ai-catalog-validate` | Semantic validation; conformance levels: Minimal, Discoverable, Trusted |
+| `crates/ai-catalog-trust` | Trust manifest analysis, digest verification, and canonicalization |
+| `crates/ai-catalog-oci` | OCI artifact-set pack/unpack; standard OCI image layout import/export |
+| `crates/ai-catalog-cli` | CLI binary `ai-catalog`; author and consumer commands |
 
-## First milestone
+### Conformance levels
 
-The first milestone is a green `cargo test` that parses, serializes, and
-validates the canonical spec example plus a small set of semantic rules such as
-`url`/`data` exclusivity, duplicate identifiers, and trust identity binding.
+- **Minimal** — `specVersion` + at least one entry with `identifier` and `type`
+- **Discoverable** — Minimal + `url` or `data` on entries + `tags`
+- **Trusted** — Discoverable + `trustManifest` with `identity` on entries
 
-## CLI
-
-Build and test the workspace with:
+## Getting started
 
 ```sh
+# Build all crates
 just build
-just lint
-just test
-just coverage
+# Or with cargo
+cargo build --workspace
+
+# Install the CLI
+cargo install --path crates/ai-catalog-cli
 ```
 
-Use the CLI with:
+## CLI — Author commands
+
+Author commands validate, format, and publish AI Catalog documents.
+
+During development use `cargo run -p ai-catalog-cli -- <args>` in place of
+`ai-catalog`.
 
 ```sh
-cargo run -p ai-catalog-cli -- help
-cargo run -p ai-catalog-cli -- validate fixtures/spec-example.json
-cargo run -p ai-catalog-cli -- validate --json fixtures/spec-example.json
-cargo run -p ai-catalog-cli -- format fixtures/spec-example.json
-cargo run -p ai-catalog-cli -- trust inspect fixtures/spec-example.json
-cargo run -p ai-catalog-cli -- trust inspect --json fixtures/spec-example.json
-cargo run -p ai-catalog-cli -- oci pack fixtures/spec-example.json
-cargo run -p ai-catalog-cli -- oci unpack artifacts.json
-cargo run -p ai-catalog-cli -- oci export-layout fixtures/spec-example.json /tmp/ai-catalog-layout
-cargo run -p ai-catalog-cli -- oci export-layout --cosign-key cosign.key fixtures/spec-example.json /tmp/ai-catalog-layout
-cargo run -p ai-catalog-cli -- oci unpack-layout /tmp/ai-catalog-layout
-cargo run -p ai-catalog-cli -- oci push fixtures/spec-example.json ghcr.io/example/ai-catalog:latest
-cargo run -p ai-catalog-cli -- oci push --cosign-key cosign.key fixtures/spec-example.json ghcr.io/example/ai-catalog:latest
-cargo run -p ai-catalog-cli -- oci push fixtures/spec-example.json example.com:latest --to-oci-layout-path /tmp/ai-catalog-copy
-cat fixtures/spec-example.json | cargo run -p ai-catalog-cli -- validate --json -
-cat fixtures/spec-example.json | cargo run -p ai-catalog-cli -- format -
-cat fixtures/spec-example.json | cargo run -p ai-catalog-cli -- oci pack -
+# Validate a catalog (text or JSON output)
+ai-catalog validate fixtures/spec-example.json
+ai-catalog validate --json fixtures/spec-example.json
+
+# Format / pretty-print a catalog
+ai-catalog format fixtures/spec-example.json
+
+# Inspect trust manifests
+ai-catalog trust inspect fixtures/spec-example.json
+ai-catalog trust inspect --json fixtures/spec-example.json
+
+# Pack into OCI artifact set JSON
+ai-catalog oci pack fixtures/spec-example.json
+
+# Export / import standard OCI image layout
+ai-catalog oci export-layout [--tag <tag>] fixtures/spec-example.json /tmp/layout
+ai-catalog oci unpack-layout /tmp/layout
+
+# Push to OCI registry (delegates to oras)
+ai-catalog oci push fixtures/spec-example.json ghcr.io/example/ai-catalog:latest
+ai-catalog oci push --cosign-key cosign.key fixtures/spec-example.json ghcr.io/example/ai-catalog:latest
+
+# Read from stdin using '-'
+cat fixtures/spec-example.json | ai-catalog validate --json -
+cat fixtures/spec-example.json | ai-catalog oci pack -
 ```
 
-`oci pack` and `oci unpack` operate on the internal JSON artifact-set envelope used by
-the Rust library. `oci export-layout` writes a standard OCI image layout directory,
-`oci unpack-layout` imports that standard layout back into AI Catalog JSON, and
-`oci push` delegates distribution to `oras cp -r` from a temporary exported layout
-so standard OCI tooling can validate or publish the result.
+## CLI — Consumer commands
+
+Consumer commands discover and pull artifacts from registered catalogs. Catalogs
+are stored locally in `~/.ai-catalog/` using content-addressed storage (SHA-256).
+Only `catalog add` and `catalog update` make network requests; all other consumer
+commands operate on the local cache.
+
+`catalog add` fetches the target catalog and any nested catalogs recursively (up
+to depth 4) and caches them locally.
+
+```sh
+# Register a remote catalog (fetches and caches locally in ~/.ai-catalog/)
+ai-catalog catalog add my-registry https://example.com/ai-catalog.json
+
+# List registered catalogs
+ai-catalog catalog list
+ai-catalog catalog list --json
+
+# Refresh a registered catalog from source
+ai-catalog catalog update my-registry
+
+# Remove a registered catalog
+ai-catalog catalog remove my-registry
+
+# Search across all registered catalogs
+ai-catalog search "finance agent"
+ai-catalog search --regex "urn:example:(agent|data).*"
+ai-catalog search --json "dataset"
+
+# Show details of a specific entry
+ai-catalog show urn:example:agent-finance-001
+ai-catalog show --json urn:example:agent-finance-001
+ai-catalog show --scope my-registry urn:example:agent-finance-001
+
+# Pull an artifact to disk
+ai-catalog pull urn:example:data:market-dataset-2026q1
+ai-catalog pull --output ./downloads urn:example:data:market-dataset-2026q1
+```
+
+## OCI and cosign
+
+`oci pack` / `oci unpack` operate on the internal JSON artifact-set envelope used
+by the Rust library.
+
+`oci export-layout` writes a standard OCI image layout directory;
+`oci unpack-layout` imports that layout back into AI Catalog JSON.
+
+`oci push` delegates distribution to `oras cp -r` from a temporary exported
+layout so standard OCI tooling can validate or publish the result.
 
 When `--cosign-key` is supplied to `oci export-layout` or `oci push`, the CLI
-canonicalizes each entry trust manifest, signs that blob with `cosign sign-blob`,
+canonicalizes each entry trust manifest, signs the blob with `cosign sign-blob`,
 derives or reads a PEM public key, and stores both the detached signature and
 public key as OCI referrer artifacts in the exported layout. If the private key
-is encrypted, provide the password non-interactively through `COSIGN_PASSWORD`.
+is encrypted, supply the password through the `COSIGN_PASSWORD` environment
+variable.
+
+## Development
+
+```sh
+just build     # cargo build --workspace
+just lint      # fmt check + clippy -D warnings
+just test      # cargo test --workspace
+just coverage  # llvm-cov summary
+```
 
 ## Demo
-
-The walkthrough requires `cargo`, `oras`, and `cosign` on `PATH`. `just` is
-optional. On macOS and Linux, use the Bash walkthrough. On Windows, use the
-PowerShell walkthrough in `demo/oci-layout-walkthrough.ps1`. See
-`demo/oci-layout-walkthrough.md` for the prerequisite commands.
 
 Run the end-to-end OCI walkthrough with:
 
@@ -84,8 +144,9 @@ Run the end-to-end OCI walkthrough with:
 just demo-oci-layout
 ```
 
-The walkthrough script lives at `demo/oci-layout-walkthrough.sh` and is described
-in `demo/oci-layout-walkthrough.md`.
+Requires `cargo`, `oras`, and `cosign` on `PATH`. See
+`demo/oci-layout-walkthrough.md` for prerequisites and a step-by-step
+description of the walkthrough.
 
 ## Governance
 
