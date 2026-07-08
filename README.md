@@ -138,15 +138,33 @@ just coverage  # llvm-cov summary
 
 ## Demo
 
-Run the end-to-end OCI walkthrough with:
+### OCI layout walkthrough
+
+Exercises the full OCI publish/verify flow with a trusted catalog, ephemeral
+Cosign key pair, and standard OCI image layout inspection:
 
 ```sh
 just demo-oci-layout
 ```
 
 Requires `cargo`, `oras`, and `cosign` on `PATH`. See
-`demo/oci-layout-walkthrough.md` for prerequisites and a step-by-step
-description of the walkthrough.
+[demo/oci-layout-walkthrough.md](demo/oci-layout-walkthrough.md) for
+prerequisites and a step-by-step description.
+
+### Consumer workflow walkthrough
+
+Exercises every author and consumer command end to end using local `file://`
+URLs — no network calls, no external registry required:
+
+```sh
+just demo-consumer
+```
+
+Requires only `cargo`. The walkthrough covers `validate`, `format`,
+`trust inspect`, `catalog add/list/update/remove`, `search` (keyword, regex,
+JSON, limit), `show` (text, JSON, scoped), and `pull` (inline-data and
+file-URL entries). See [demo/consumer-walkthrough.md](demo/consumer-walkthrough.md)
+for a full description of each step.
 
 ## Governance
 

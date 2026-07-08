@@ -18,7 +18,15 @@ pub struct CacheManager {
 
 impl CacheManager {
     /// Create a new CacheManager rooted at `~/.ai-catalog/`.
+    ///
+    /// If the `AI_CATALOG_CACHE_DIR` environment variable is set, that path is
+    /// used instead. This is useful for demo scripts and testing.
     pub fn new() -> Result<Self> {
+        if let Ok(dir) = std::env::var("AI_CATALOG_CACHE_DIR") {
+            return Ok(CacheManager {
+                base_dir: PathBuf::from(dir),
+            });
+        }
         let home = dirs::home_dir()
             .ok_or_else(|| Error::CacheDir("cannot determine home directory".to_string()))?;
         Ok(CacheManager {

@@ -12,6 +12,12 @@ demo_oci_layout_command := if os_family() == "windows" {
 	"./demo/oci-layout-walkthrough.sh"
 }
 
+demo_consumer_command := if os_family() == "windows" {
+	"powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File ./demo/consumer-walkthrough.ps1"
+} else {
+	"./demo/consumer-walkthrough.sh"
+}
+
 build:
 	cargo build --workspace
 
@@ -24,6 +30,9 @@ test:
 
 demo-oci-layout:
 	{{demo_oci_layout_command}}
+
+demo-consumer:
+	{{demo_consumer_command}}
 
 coverage:
 	toolchain="$(awk -F'"' '/^channel = / {print $2}' rust-toolchain.toml)"; \
