@@ -44,16 +44,15 @@ pub async fn execute(name_or_url: &str) -> Result<()> {
         .as_ref()
         .and_then(|m| m.get("contentHash"))
         .and_then(|v| v.as_str())
+        && !referenced_hashes.contains(hash)
     {
-        if !referenced_hashes.contains(hash) {
-            let obj_path = cache.object_path(hash);
-            if obj_path.exists() {
-                std::fs::remove_file(&obj_path)?;
-            }
-            let mut refs = cache.read_refs()?;
-            refs.retain(|_, v| v != hash);
-            cache.write_refs(&refs)?;
+        let obj_path = cache.object_path(hash);
+        if obj_path.exists() {
+            std::fs::remove_file(&obj_path)?;
         }
+        let mut refs = cache.read_refs()?;
+        refs.retain(|_, v| v != hash);
+        cache.write_refs(&refs)?;
     }
     cache.write_registry(&registry)?;
     println!("{} \"{}\" removed.", "✓".green(), display_name.bold());

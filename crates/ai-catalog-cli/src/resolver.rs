@@ -8,7 +8,7 @@ use serde_json::json;
 
 use ai_catalog::{AiCatalog, CatalogEntry};
 
-use crate::cache::{content_hash, CacheManager};
+use crate::cache::{CacheManager, content_hash};
 use crate::error::{Error, Result};
 use crate::fetch::fetch_catalog;
 
@@ -389,25 +389,23 @@ fn search_catalog_for_id(
                 }
             };
             let path = local_url.strip_prefix("file://").unwrap_or(&local_url);
-            if let Ok(bytes) = std::fs::read(path) {
-                if let Ok(nested) = serde_json::from_slice::<AiCatalog>(&bytes) {
-                    if let Some(found) =
-                        search_catalog_for_id(&nested, id, url_to_hash, visited, depth + 1, cache)
-                    {
-                        return Some(found);
-                    }
-                }
+            if let Ok(bytes) = std::fs::read(path)
+                && let Ok(nested) = serde_json::from_slice::<AiCatalog>(&bytes)
+                && let Some(found) =
+                    search_catalog_for_id(&nested, id, url_to_hash, visited, depth + 1, cache)
+            {
+                return Some(found);
             }
-        } else if let Some(data) = &entry.data {
-            if let Ok(inline) = serde_json::from_value::<AiCatalog>(data.clone()) {
-                let inline_url = format!("inline:{}", entry.identifier);
-                if !visited.contains(&inline_url) {
-                    visited.insert(inline_url.clone());
-                    if let Some(found) =
-                        search_catalog_for_id(&inline, id, url_to_hash, visited, depth + 1, cache)
-                    {
-                        return Some(found);
-                    }
+        } else if let Some(data) = &entry.data
+            && let Ok(inline) = serde_json::from_value::<AiCatalog>(data.clone())
+        {
+            let inline_url = format!("inline:{}", entry.identifier);
+            if !visited.contains(&inline_url) {
+                visited.insert(inline_url.clone());
+                if let Some(found) =
+                    search_catalog_for_id(&inline, id, url_to_hash, visited, depth + 1, cache)
+                {
+                    return Some(found);
                 }
             }
         }
@@ -435,18 +433,18 @@ pub async fn resolve_local_oci(cache: &CacheManager) -> Result<Vec<ResolvedEntry
             }
             visited.insert(url.clone());
             let path = url.strip_prefix("file://").unwrap_or(url);
-            if let Ok(bytes) = std::fs::read(path) {
-                if let Ok(catalog) = serde_json::from_slice::<AiCatalog>(&bytes) {
-                    resolve_local_inner(
-                        &catalog,
-                        url,
-                        0,
-                        &url_to_hash,
-                        &mut visited,
-                        &mut entries,
-                        cache,
-                    );
-                }
+            if let Ok(bytes) = std::fs::read(path)
+                && let Ok(catalog) = serde_json::from_slice::<AiCatalog>(&bytes)
+            {
+                resolve_local_inner(
+                    &catalog,
+                    url,
+                    0,
+                    &url_to_hash,
+                    &mut visited,
+                    &mut entries,
+                    cache,
+                );
             }
         }
     }
@@ -470,14 +468,14 @@ pub fn find_entry_by_id_oci(id: &str, cache: &CacheManager) -> Result<Option<Cat
             }
             visited.insert(url.clone());
             let path = url.strip_prefix("file://").unwrap_or(url);
-            if let Ok(bytes) = std::fs::read(path) {
-                if let Ok(catalog) = serde_json::from_slice::<AiCatalog>(&bytes) {
-                    let mut sub_visited = visited.clone();
-                    if let Some(found) =
-                        search_catalog_for_id(&catalog, id, &url_to_hash, &mut sub_visited, 0, cache)
-                    {
-                        return Ok(Some(found));
-                    }
+            if let Ok(bytes) = std::fs::read(path)
+                && let Ok(catalog) = serde_json::from_slice::<AiCatalog>(&bytes)
+            {
+                let mut sub_visited = visited.clone();
+                if let Some(found) =
+                    search_catalog_for_id(&catalog, id, &url_to_hash, &mut sub_visited, 0, cache)
+                {
+                    return Ok(Some(found));
                 }
             }
         }
@@ -657,7 +655,10 @@ mod tests {
 
         // Both leaf entries returned
         assert_eq!(entries.len(), 2);
-        let ids: Vec<&str> = entries.iter().map(|e| e.entry.identifier.as_str()).collect();
+        let ids: Vec<&str> = entries
+            .iter()
+            .map(|e| e.entry.identifier.as_str())
+            .collect();
         assert!(ids.contains(&"urn:test:alpha"));
         assert!(ids.contains(&"urn:test:beta"));
 

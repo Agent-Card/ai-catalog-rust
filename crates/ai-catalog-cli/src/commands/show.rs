@@ -17,11 +17,7 @@ use super::OutputFormat;
 ///
 /// `scope` optionally restricts the search to a specific registered catalog
 /// (by name or source URL). If omitted, the entire local registry is searched.
-pub async fn execute(
-    identifier: &str,
-    output: OutputFormat,
-    scope: Option<&str>,
-) -> Result<()> {
+pub async fn execute(identifier: &str, output: OutputFormat, scope: Option<&str>) -> Result<()> {
     let cache = CacheManager::new()?;
 
     let entry = if let Some(scope_name) = scope {
@@ -74,11 +70,7 @@ fn find_entry_in_scope(
 
 pub(crate) fn print_entry_table(entry: &CatalogEntry, cache: &CacheManager) {
     println!("{}", "─".repeat(60));
-    println!(
-        "  {}  {}",
-        "Identifier:".bold(),
-        entry.identifier
-    );
+    println!("  {}  {}", "Identifier:".bold(), entry.identifier);
     if let Some(name) = &entry.display_name {
         println!("  {}  {}", "Name:".bold(), name);
     }
@@ -119,12 +111,12 @@ pub(crate) fn print_entry_table(entry: &CatalogEntry, cache: &CacheManager) {
             );
         }
     }
-    if let Some(meta) = &entry.metadata {
-        if !meta.is_empty() {
-            println!("  {}:", "Metadata".bold());
-            for (k, v) in meta {
-                println!("    {}: {}", k, v);
-            }
+    if let Some(meta) = &entry.metadata
+        && !meta.is_empty()
+    {
+        println!("  {}:", "Metadata".bold());
+        for (k, v) in meta {
+            println!("    {}: {}", k, v);
         }
     }
 
@@ -160,16 +152,17 @@ fn print_nested_catalog_entries(entry: &CatalogEntry, cache: &CacheManager) {
         return;
     }
 
-    println!("  {}  {} entries", "Nested entries:".bold(), leaf_entries.len());
+    println!(
+        "  {}  {} entries",
+        "Nested entries:".bold(),
+        leaf_entries.len()
+    );
     for resolved in leaf_entries.iter().take(10) {
         let e = &resolved.entry;
         let name = e.display_name.as_deref().unwrap_or("-");
         println!("    • {} ({})", e.identifier.cyan(), name);
     }
     if leaf_entries.len() > 10 {
-        println!(
-            "    … and {} more",
-            leaf_entries.len() - 10
-        );
+        println!("    … and {} more", leaf_entries.len() - 10);
     }
 }

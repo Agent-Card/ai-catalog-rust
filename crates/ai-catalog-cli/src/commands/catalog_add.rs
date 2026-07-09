@@ -32,14 +32,13 @@ pub async fn execute(name: &str, url: &str) -> Result<()> {
                 .as_ref()
                 .and_then(|m| m.get("sourceUrl"))
                 .and_then(|v| v.as_str())
+                && source_url.eq_ignore_ascii_case(url)
             {
-                if source_url.eq_ignore_ascii_case(url) {
-                    return Err(Error::Other(format!(
-                        "URL is already registered as \"{}\". Use `ai-catalog catalog update {}` to refresh it.",
-                        entry.display_name.as_deref().unwrap_or("?"),
-                        entry.display_name.as_deref().unwrap_or("?")
-                    )));
-                }
+                return Err(Error::Other(format!(
+                    "URL is already registered as \"{}\". Use `ai-catalog catalog update {}` to refresh it.",
+                    entry.display_name.as_deref().unwrap_or("?"),
+                    entry.display_name.as_deref().unwrap_or("?")
+                )));
             }
         }
     }

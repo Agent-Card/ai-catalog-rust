@@ -153,7 +153,10 @@ fn catalog_command<W: Write, E: Write>(
     stderr: &mut E,
 ) -> io::Result<i32> {
     let Some((subcommand, remaining)) = args.split_first() else {
-        writeln!(stderr, "catalog expects a subcommand: add, list, remove, update")?;
+        writeln!(
+            stderr,
+            "catalog expects a subcommand: add, list, remove, update"
+        )?;
         write_usage(stderr)?;
         return Ok(2);
     };
@@ -170,7 +173,11 @@ fn catalog_command<W: Write, E: Write>(
         }
         "list" => {
             let is_json = remaining.iter().any(|a| a == "--json" || a == "-j");
-            let fmt = if is_json { commands::OutputFormat::Json } else { commands::OutputFormat::Table };
+            let fmt = if is_json {
+                commands::OutputFormat::Json
+            } else {
+                commands::OutputFormat::Table
+            };
             match run_consumer(commands::catalog_list::execute(fmt)) {
                 Ok(()) => Ok(0),
                 Err(e) => consumer_error_to_io(e, stderr),
@@ -228,10 +235,17 @@ fn search_command<E: Write>(args: &[String], stderr: &mut E) -> io::Result<i32> 
         }
     }
     let Some(keyword) = keyword else {
-        writeln!(stderr, "usage: {BIN_NAME} search [--regex] [-n <limit>] [--json] <keyword>")?;
+        writeln!(
+            stderr,
+            "usage: {BIN_NAME} search [--regex] [-n <limit>] [--json] <keyword>"
+        )?;
         return Ok(2);
     };
-    let fmt = if is_json { commands::OutputFormat::Json } else { commands::OutputFormat::Table };
+    let fmt = if is_json {
+        commands::OutputFormat::Json
+    } else {
+        commands::OutputFormat::Table
+    };
     match run_consumer(commands::search::execute(&keyword, use_regex, limit, fmt)) {
         Ok(()) => Ok(0),
         Err(e) => consumer_error_to_io(e, stderr),
@@ -254,10 +268,17 @@ fn show_command<E: Write>(args: &[String], stderr: &mut E) -> io::Result<i32> {
         }
     }
     let Some(identifier) = identifier else {
-        writeln!(stderr, "usage: {BIN_NAME} show [--scope <catalog-name>] [--json] <identifier>")?;
+        writeln!(
+            stderr,
+            "usage: {BIN_NAME} show [--scope <catalog-name>] [--json] <identifier>"
+        )?;
         return Ok(2);
     };
-    let fmt = if is_json { commands::OutputFormat::Json } else { commands::OutputFormat::Table };
+    let fmt = if is_json {
+        commands::OutputFormat::Json
+    } else {
+        commands::OutputFormat::Table
+    };
     match run_consumer(commands::show::execute(&identifier, fmt, scope.as_deref())) {
         Ok(()) => Ok(0),
         Err(e) => consumer_error_to_io(e, stderr),
@@ -278,7 +299,10 @@ fn pull_command<E: Write>(args: &[String], stderr: &mut E) -> io::Result<i32> {
         }
     }
     let Some(identifier) = identifier else {
-        writeln!(stderr, "usage: {BIN_NAME} pull [--output <path>] <identifier>")?;
+        writeln!(
+            stderr,
+            "usage: {BIN_NAME} pull [--output <path>] <identifier>"
+        )?;
         return Ok(2);
     };
     match run_consumer(commands::pull::execute(&identifier, output_path.as_deref())) {
@@ -688,10 +712,17 @@ fn oci_add_command<E: Write>(args: &[String], stderr: &mut E) -> io::Result<i32>
         }
     }
     let (Some(name), Some(layout_path)) = (name, layout_path) else {
-        writeln!(stderr, "usage: {BIN_NAME} oci add <name> <layout-dir> [--ref-name <tag>]")?;
+        writeln!(
+            stderr,
+            "usage: {BIN_NAME} oci add <name> <layout-dir> [--ref-name <tag>]"
+        )?;
         return Ok(2);
     };
-    match run_consumer(commands::oci_add::execute(&name, &layout_path, ref_name.as_deref())) {
+    match run_consumer(commands::oci_add::execute(
+        &name,
+        &layout_path,
+        ref_name.as_deref(),
+    )) {
         Ok(()) => Ok(0),
         Err(e) => consumer_error_to_io(e, stderr),
     }
@@ -717,11 +748,20 @@ fn oci_search_command<E: Write>(args: &[String], stderr: &mut E) -> io::Result<i
         }
     }
     let Some(keyword) = keyword else {
-        writeln!(stderr, "usage: {BIN_NAME} oci search [--regex] [-n <limit>] [--json] <keyword>")?;
+        writeln!(
+            stderr,
+            "usage: {BIN_NAME} oci search [--regex] [-n <limit>] [--json] <keyword>"
+        )?;
         return Ok(2);
     };
-    let fmt = if is_json { commands::OutputFormat::Json } else { commands::OutputFormat::Table };
-    match run_consumer(commands::oci_search::execute(&keyword, use_regex, limit, fmt)) {
+    let fmt = if is_json {
+        commands::OutputFormat::Json
+    } else {
+        commands::OutputFormat::Table
+    };
+    match run_consumer(commands::oci_search::execute(
+        &keyword, use_regex, limit, fmt,
+    )) {
         Ok(()) => Ok(0),
         Err(e) => consumer_error_to_io(e, stderr),
     }
@@ -730,8 +770,7 @@ fn oci_search_command<E: Write>(args: &[String], stderr: &mut E) -> io::Result<i
 fn oci_show_command<E: Write>(args: &[String], stderr: &mut E) -> io::Result<i32> {
     let mut identifier = None;
     let mut is_json = false;
-    let mut iter = args.iter();
-    while let Some(arg) = iter.next() {
+    for arg in args {
         match arg.as_str() {
             "--json" | "-j" => is_json = true,
             s if !s.starts_with('-') => identifier = Some(s.to_string()),
@@ -742,7 +781,11 @@ fn oci_show_command<E: Write>(args: &[String], stderr: &mut E) -> io::Result<i32
         writeln!(stderr, "usage: {BIN_NAME} oci show [--json] <identifier>")?;
         return Ok(2);
     };
-    let fmt = if is_json { commands::OutputFormat::Json } else { commands::OutputFormat::Table };
+    let fmt = if is_json {
+        commands::OutputFormat::Json
+    } else {
+        commands::OutputFormat::Table
+    };
     match run_consumer(commands::oci_show::execute(&identifier, fmt)) {
         Ok(()) => Ok(0),
         Err(e) => consumer_error_to_io(e, stderr),
@@ -763,10 +806,16 @@ fn oci_pull_command<E: Write>(args: &[String], stderr: &mut E) -> io::Result<i32
         }
     }
     let Some(identifier) = identifier else {
-        writeln!(stderr, "usage: {BIN_NAME} oci pull [--output <path>] <identifier>")?;
+        writeln!(
+            stderr,
+            "usage: {BIN_NAME} oci pull [--output <path>] <identifier>"
+        )?;
         return Ok(2);
     };
-    match run_consumer(commands::oci_pull::execute(&identifier, output_path.as_deref())) {
+    match run_consumer(commands::oci_pull::execute(
+        &identifier,
+        output_path.as_deref(),
+    )) {
         Ok(()) => Ok(0),
         Err(e) => consumer_error_to_io(e, stderr),
     }
@@ -1295,19 +1344,43 @@ fn write_usage(writer: &mut impl Write) -> io::Result<()> {
     writeln!(writer, "  {BIN_NAME} trust inspect [--json] <path|->")?;
     writeln!(writer, "  {BIN_NAME} oci pack <path|->")?;
     writeln!(writer, "  {BIN_NAME} oci unpack <path|->")?;
-    writeln!(writer, "  {BIN_NAME} oci export-layout [--tag <tag>] [--cosign-key <path>] [--cosign-public-key <path>] <path|-> <layout-dir>")?;
-    writeln!(writer, "  {BIN_NAME} oci unpack-layout [--ref-name <name>] <layout-dir>")?;
-    writeln!(writer, "  {BIN_NAME} oci push [--tag <tag>] [--plain-http] [--insecure] [--to-oci-layout-path <layout-dir>] [--cosign-key <path>] [--cosign-public-key <path>] <path|-> <target>")?;
-    writeln!(writer, "  {BIN_NAME} oci add <name> <layout-dir> [--ref-name <tag>]")?;
-    writeln!(writer, "  {BIN_NAME} oci search [--regex] [-n <limit>] [--json] <keyword>")?;
+    writeln!(
+        writer,
+        "  {BIN_NAME} oci export-layout [--tag <tag>] [--cosign-key <path>] [--cosign-public-key <path>] <path|-> <layout-dir>"
+    )?;
+    writeln!(
+        writer,
+        "  {BIN_NAME} oci unpack-layout [--ref-name <name>] <layout-dir>"
+    )?;
+    writeln!(
+        writer,
+        "  {BIN_NAME} oci push [--tag <tag>] [--plain-http] [--insecure] [--to-oci-layout-path <layout-dir>] [--cosign-key <path>] [--cosign-public-key <path>] <path|-> <target>"
+    )?;
+    writeln!(
+        writer,
+        "  {BIN_NAME} oci add <name> <layout-dir> [--ref-name <tag>]"
+    )?;
+    writeln!(
+        writer,
+        "  {BIN_NAME} oci search [--regex] [-n <limit>] [--json] <keyword>"
+    )?;
     writeln!(writer, "  {BIN_NAME} oci show [--json] <identifier>")?;
-    writeln!(writer, "  {BIN_NAME} oci pull [--output <path>] <identifier>")?;
+    writeln!(
+        writer,
+        "  {BIN_NAME} oci pull [--output <path>] <identifier>"
+    )?;
     writeln!(writer, "  {BIN_NAME} catalog add <name> <url>")?;
     writeln!(writer, "  {BIN_NAME} catalog list [--json]")?;
     writeln!(writer, "  {BIN_NAME} catalog remove <name-or-url>")?;
     writeln!(writer, "  {BIN_NAME} catalog update <name>")?;
-    writeln!(writer, "  {BIN_NAME} search [--regex] [-n <limit>] [--json] <keyword>")?;
-    writeln!(writer, "  {BIN_NAME} show [--scope <catalog-name>] [--json] <identifier>")?;
+    writeln!(
+        writer,
+        "  {BIN_NAME} search [--regex] [-n <limit>] [--json] <keyword>"
+    )?;
+    writeln!(
+        writer,
+        "  {BIN_NAME} show [--scope <catalog-name>] [--json] <identifier>"
+    )?;
     writeln!(writer, "  {BIN_NAME} pull [--output <path>] <identifier>")?;
     writeln!(writer, "  {BIN_NAME} help")?;
     writeln!(writer, "  {BIN_NAME} version")?;
