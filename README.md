@@ -111,9 +111,6 @@ ai-catalog pull --output ./downloads urn:example:data:market-dataset-2026q1
 
 ## OCI and cosign
 
-`oci pack` / `oci unpack` operate on the internal JSON artifact-set envelope used
-by the Rust library.
-
 `oci export-layout` writes a standard OCI image layout directory;
 `oci unpack-layout` imports that layout back into AI Catalog JSON.
 
@@ -122,10 +119,30 @@ layout so standard OCI tooling can validate or publish the result.
 
 When `--cosign-key` is supplied to `oci export-layout` or `oci push`, the CLI
 canonicalizes each entry trust manifest, signs the blob with `cosign sign-blob`,
-derives or reads a PEM public key, and stores both the detached signature and
-public key as OCI referrer artifacts in the exported layout. If the private key
-is encrypted, supply the password through the `COSIGN_PASSWORD` environment
-variable.
+derives or reads a PEM public key, and stores the detached signature and public
+key as OCI referrer artifacts. If the private key is encrypted, supply the
+password through the `COSIGN_PASSWORD` environment variable.
+
+### OCI consumer commands
+
+An OCI image layout can be imported directly into the local registry:
+
+```sh
+# Import an OCI layout into the local registry
+ai-catalog oci add my-layout /path/to/layout
+ai-catalog oci add my-layout /path/to/layout --ref-name v1.0
+
+# Search, show, and pull from OCI-sourced catalogs only
+ai-catalog oci search embeddings
+ai-catalog oci show urn:ai-catalog:oci:abc12345
+ai-catalog oci pull urn:ai-catalog:oci:abc12345
+```
+
+Entries imported from an OCI layout use the `urn:ai-catalog:oci:` identifier
+prefix and are scoped separately from plain-URL registrations. The plain
+`search`, `show`, and `pull` commands span all sources; the `oci` variants are
+restricted to OCI-sourced entries. See [`docs/storage.md`](docs/storage.md) for
+a comparison of the two local storage paths.
 
 ## Development
 
@@ -162,9 +179,25 @@ just demo-consumer
 
 Requires only `cargo`. The walkthrough covers `validate`, `format`,
 `trust inspect`, `catalog add/list/update/remove`, `search` (keyword, regex,
-JSON, limit), `show` (text, JSON, scoped), and `pull` (inline-data and
-file-URL entries). See [demo/consumer-walkthrough.md](demo/consumer-walkthrough.md)
+JSON, limit), `show` (text, JSON, scoped), `pull` (inline-data and file-URL
+entries), and the OCI consumer path (`oci add`, `oci search`, `oci show`,
+`oci pull`). See [demo/consumer-walkthrough.md](demo/consumer-walkthrough.md)
 for a full description of each step.
+
+### Trust sign & verify walkthrough
+
+Demonstrates the complete trust manifest lifecycle — from unsigned catalog to
+cryptographic verification and tamper detection:
+
+```sh
+just demo-trust
+```
+
+Requires `cargo`, `cosign`, and `oras`. The walkthrough covers `trust inspect`
+(unsigned), `cosign generate-key-pair`, signing via `oci export-layout
+--cosign-key`, discovery of the OCI referrer tree, extraction of the canonical
+trust manifest and detached signature, `cosign verify-blob`, and tamper
+detection. Script: [`demo/trust-walkthrough.sh`](demo/trust-walkthrough.sh).
 
 ## Governance
 
