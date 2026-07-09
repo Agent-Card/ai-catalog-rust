@@ -18,6 +18,12 @@ demo_consumer_command := if os_family() == "windows" {
 	"./demo/consumer-walkthrough.sh"
 }
 
+demo_trust_command := if os_family() == "windows" {
+	"powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File ./demo/trust-walkthrough.ps1"
+} else {
+	"./demo/trust-walkthrough.sh"
+}
+
 build:
 	cargo build --workspace
 
@@ -33,6 +39,9 @@ demo-oci-layout:
 
 demo-consumer:
 	{{demo_consumer_command}}
+
+demo-trust:
+	{{demo_trust_command}}
 
 coverage:
 	toolchain="$(awk -F'"' '/^channel = / {print $2}' rust-toolchain.toml)"; \
