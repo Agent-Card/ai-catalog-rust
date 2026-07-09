@@ -184,7 +184,7 @@ cat > "$catalog_json" <<'EOF'
     {
       "identifier": "urn:example:inline",
       "displayName": "Inline Entry",
-      "mediaType": "application/json",
+      "type": "application/json",
       "data": {
         "name": "inline",
         "version": 1

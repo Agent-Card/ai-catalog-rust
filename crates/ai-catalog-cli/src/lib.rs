@@ -1,6 +1,12 @@
 // Copyright AGNTCY Contributors (https://github.com/agntcy)
 // SPDX-License-Identifier: Apache-2.0
 
+pub mod cache;
+pub mod commands;
+pub mod error;
+pub mod fetch;
+pub mod resolver;
+
 use std::fs;
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
@@ -20,7 +26,7 @@ use ai_catalog_validate::{ConformanceLevel, Diagnostic, validate};
 use serde_json::json;
 use sha2::{Digest as _, Sha256};
 
-const BIN_NAME: &str = "ai-catalog-cli";
+const BIN_NAME: &str = "ai-catalog";
 const DEFAULT_OCI_LAYOUT_TAG: &str = "latest";
 const ORAS_BIN_ENV: &str = "AI_CATALOG_ORAS_BIN";
 const COSIGN_BIN_ENV: &str = "AI_CATALOG_COSIGN_BIN";
@@ -113,11 +119,195 @@ where
         "format" => format_command(&remaining, stdin, stdout, stderr),
         "trust" => trust_command(&remaining, stdin, stdout, stderr),
         "oci" => oci_command(&remaining, stdin, stdout, stderr),
+        "catalog" => catalog_command(&remaining, stdout, stderr),
+        "search" => search_command(&remaining, stderr),
+        "show" => show_command(&remaining, stderr),
+        "pull" => pull_command(&remaining, stderr),
         other => {
             writeln!(stderr, "unknown command: {other}")?;
             write_usage(stderr)?;
             Ok(2)
         }
+    }
+}
+
+fn run_consumer<F>(fut: F) -> error::Result<()>
+where
+    F: std::future::Future<Output = error::Result<()>>,
+{
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(error::Error::Io)?
+        .block_on(fut)
+}
+
+fn consumer_error_to_io(err: error::Error, stderr: &mut impl Write) -> io::Result<i32> {
+    writeln!(stderr, "error: {err}")?;
+    Ok(1)
+}
+
+fn catalog_command<W: Write, E: Write>(
+    args: &[String],
+    stdout: &mut W,
+    stderr: &mut E,
+) -> io::Result<i32> {
+    let Some((subcommand, remaining)) = args.split_first() else {
+        writeln!(
+            stderr,
+            "catalog expects a subcommand: add, list, remove, update"
+        )?;
+        write_usage(stderr)?;
+        return Ok(2);
+    };
+    match subcommand.as_str() {
+        "add" => {
+            if remaining.len() < 2 {
+                writeln!(stderr, "usage: {BIN_NAME} catalog add <name> <url>")?;
+                return Ok(2);
+            }
+            match run_consumer(commands::catalog_add::execute(&remaining[0], &remaining[1])) {
+                Ok(()) => Ok(0),
+                Err(e) => consumer_error_to_io(e, stderr),
+            }
+        }
+        "list" => {
+            let is_json = remaining.iter().any(|a| a == "--json" || a == "-j");
+            let fmt = if is_json {
+                commands::OutputFormat::Json
+            } else {
+                commands::OutputFormat::Table
+            };
+            match run_consumer(commands::catalog_list::execute(fmt)) {
+                Ok(()) => Ok(0),
+                Err(e) => consumer_error_to_io(e, stderr),
+            }
+        }
+        "remove" => {
+            if remaining.is_empty() {
+                writeln!(stderr, "usage: {BIN_NAME} catalog remove <name-or-url>")?;
+                return Ok(2);
+            }
+            match run_consumer(commands::catalog_remove::execute(&remaining[0])) {
+                Ok(()) => Ok(0),
+                Err(e) => consumer_error_to_io(e, stderr),
+            }
+        }
+        "update" => {
+            if remaining.is_empty() {
+                writeln!(stderr, "usage: {BIN_NAME} catalog update <name>")?;
+                return Ok(2);
+            }
+            match run_consumer(commands::catalog_update::execute(&remaining[0])) {
+                Ok(()) => Ok(0),
+                Err(e) => consumer_error_to_io(e, stderr),
+            }
+        }
+        "help" => {
+            write_usage(stdout)?;
+            Ok(0)
+        }
+        other => {
+            writeln!(stderr, "unknown catalog subcommand: {other}")?;
+            write_usage(stderr)?;
+            Ok(2)
+        }
+    }
+}
+
+fn search_command<E: Write>(args: &[String], stderr: &mut E) -> io::Result<i32> {
+    let mut keyword = None;
+    let mut use_regex = false;
+    let mut limit = 50usize;
+    let mut is_json = false;
+    let mut iter = args.iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--regex" | "-r" => use_regex = true,
+            "--json" | "-j" => is_json = true,
+            "-n" | "--limit" => {
+                if let Some(v) = iter.next() {
+                    limit = v.parse().unwrap_or(limit);
+                }
+            }
+            s if !s.starts_with('-') => keyword = Some(s.to_string()),
+            _ => {}
+        }
+    }
+    let Some(keyword) = keyword else {
+        writeln!(
+            stderr,
+            "usage: {BIN_NAME} search [--regex] [-n <limit>] [--json] <keyword>"
+        )?;
+        return Ok(2);
+    };
+    let fmt = if is_json {
+        commands::OutputFormat::Json
+    } else {
+        commands::OutputFormat::Table
+    };
+    match run_consumer(commands::search::execute(&keyword, use_regex, limit, fmt)) {
+        Ok(()) => Ok(0),
+        Err(e) => consumer_error_to_io(e, stderr),
+    }
+}
+
+fn show_command<E: Write>(args: &[String], stderr: &mut E) -> io::Result<i32> {
+    let mut identifier = None;
+    let mut scope: Option<String> = None;
+    let mut is_json = false;
+    let mut iter = args.iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--json" | "-j" => is_json = true,
+            "--scope" | "-s" => {
+                scope = iter.next().map(|s| s.to_string());
+            }
+            s if !s.starts_with('-') => identifier = Some(s.to_string()),
+            _ => {}
+        }
+    }
+    let Some(identifier) = identifier else {
+        writeln!(
+            stderr,
+            "usage: {BIN_NAME} show [--scope <catalog-name>] [--json] <identifier>"
+        )?;
+        return Ok(2);
+    };
+    let fmt = if is_json {
+        commands::OutputFormat::Json
+    } else {
+        commands::OutputFormat::Table
+    };
+    match run_consumer(commands::show::execute(&identifier, fmt, scope.as_deref())) {
+        Ok(()) => Ok(0),
+        Err(e) => consumer_error_to_io(e, stderr),
+    }
+}
+
+fn pull_command<E: Write>(args: &[String], stderr: &mut E) -> io::Result<i32> {
+    let mut identifier = None;
+    let mut output_path: Option<String> = None;
+    let mut iter = args.iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--output" | "-o" => {
+                output_path = iter.next().map(|s| s.to_string());
+            }
+            s if !s.starts_with('-') => identifier = Some(s.to_string()),
+            _ => {}
+        }
+    }
+    let Some(identifier) = identifier else {
+        writeln!(
+            stderr,
+            "usage: {BIN_NAME} pull [--output <path>] <identifier>"
+        )?;
+        return Ok(2);
+    };
+    match run_consumer(commands::pull::execute(&identifier, output_path.as_deref())) {
+        Ok(()) => Ok(0),
+        Err(e) => consumer_error_to_io(e, stderr),
     }
 }
 
@@ -289,6 +479,10 @@ fn oci_command<R: Read, W: Write, E: Write>(
         "export-layout" => oci_export_layout_command(remaining, stdin, stdout, stderr),
         "unpack-layout" => oci_unpack_layout_command(remaining, stdout, stderr),
         "push" => oci_push_command(remaining, stdin, stdout, stderr),
+        "add" => oci_add_command(remaining, stderr),
+        "search" => oci_search_command(remaining, stderr),
+        "show" => oci_show_command(remaining, stderr),
+        "pull" => oci_pull_command(remaining, stderr),
         "help" => {
             write_usage(stdout)?;
             Ok(0)
@@ -495,6 +689,136 @@ fn oci_unpack_layout_command<W: Write, E: Write>(
     writeln!(stdout)?;
 
     Ok(0)
+}
+
+fn oci_add_command<E: Write>(args: &[String], stderr: &mut E) -> io::Result<i32> {
+    let mut name = None;
+    let mut layout_path = None;
+    let mut ref_name: Option<String> = None;
+    let mut iter = args.iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--ref-name" | "-r" => {
+                ref_name = iter.next().map(|s| s.to_string());
+            }
+            s if !s.starts_with('-') => {
+                if name.is_none() {
+                    name = Some(s.to_string());
+                } else {
+                    layout_path = Some(s.to_string());
+                }
+            }
+            _ => {}
+        }
+    }
+    let (Some(name), Some(layout_path)) = (name, layout_path) else {
+        writeln!(
+            stderr,
+            "usage: {BIN_NAME} oci add <name> <layout-dir> [--ref-name <tag>]"
+        )?;
+        return Ok(2);
+    };
+    match run_consumer(commands::oci_add::execute(
+        &name,
+        &layout_path,
+        ref_name.as_deref(),
+    )) {
+        Ok(()) => Ok(0),
+        Err(e) => consumer_error_to_io(e, stderr),
+    }
+}
+
+fn oci_search_command<E: Write>(args: &[String], stderr: &mut E) -> io::Result<i32> {
+    let mut keyword = None;
+    let mut use_regex = false;
+    let mut limit = 50usize;
+    let mut is_json = false;
+    let mut iter = args.iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--regex" | "-r" => use_regex = true,
+            "--json" | "-j" => is_json = true,
+            "-n" | "--limit" => {
+                if let Some(v) = iter.next() {
+                    limit = v.parse().unwrap_or(limit);
+                }
+            }
+            s if !s.starts_with('-') => keyword = Some(s.to_string()),
+            _ => {}
+        }
+    }
+    let Some(keyword) = keyword else {
+        writeln!(
+            stderr,
+            "usage: {BIN_NAME} oci search [--regex] [-n <limit>] [--json] <keyword>"
+        )?;
+        return Ok(2);
+    };
+    let fmt = if is_json {
+        commands::OutputFormat::Json
+    } else {
+        commands::OutputFormat::Table
+    };
+    match run_consumer(commands::oci_search::execute(
+        &keyword, use_regex, limit, fmt,
+    )) {
+        Ok(()) => Ok(0),
+        Err(e) => consumer_error_to_io(e, stderr),
+    }
+}
+
+fn oci_show_command<E: Write>(args: &[String], stderr: &mut E) -> io::Result<i32> {
+    let mut identifier = None;
+    let mut is_json = false;
+    for arg in args {
+        match arg.as_str() {
+            "--json" | "-j" => is_json = true,
+            s if !s.starts_with('-') => identifier = Some(s.to_string()),
+            _ => {}
+        }
+    }
+    let Some(identifier) = identifier else {
+        writeln!(stderr, "usage: {BIN_NAME} oci show [--json] <identifier>")?;
+        return Ok(2);
+    };
+    let fmt = if is_json {
+        commands::OutputFormat::Json
+    } else {
+        commands::OutputFormat::Table
+    };
+    match run_consumer(commands::oci_show::execute(&identifier, fmt)) {
+        Ok(()) => Ok(0),
+        Err(e) => consumer_error_to_io(e, stderr),
+    }
+}
+
+fn oci_pull_command<E: Write>(args: &[String], stderr: &mut E) -> io::Result<i32> {
+    let mut identifier = None;
+    let mut output_path: Option<String> = None;
+    let mut iter = args.iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--output" | "-o" => {
+                output_path = iter.next().map(|s| s.to_string());
+            }
+            s if !s.starts_with('-') => identifier = Some(s.to_string()),
+            _ => {}
+        }
+    }
+    let Some(identifier) = identifier else {
+        writeln!(
+            stderr,
+            "usage: {BIN_NAME} oci pull [--output <path>] <identifier>"
+        )?;
+        return Ok(2);
+    };
+    match run_consumer(commands::oci_pull::execute(
+        &identifier,
+        output_path.as_deref(),
+    )) {
+        Ok(()) => Ok(0),
+        Err(e) => consumer_error_to_io(e, stderr),
+    }
 }
 
 fn oci_push_command<R: Read, W: Write, E: Write>(
@@ -1032,6 +1356,32 @@ fn write_usage(writer: &mut impl Write) -> io::Result<()> {
         writer,
         "  {BIN_NAME} oci push [--tag <tag>] [--plain-http] [--insecure] [--to-oci-layout-path <layout-dir>] [--cosign-key <path>] [--cosign-public-key <path>] <path|-> <target>"
     )?;
+    writeln!(
+        writer,
+        "  {BIN_NAME} oci add <name> <layout-dir> [--ref-name <tag>]"
+    )?;
+    writeln!(
+        writer,
+        "  {BIN_NAME} oci search [--regex] [-n <limit>] [--json] <keyword>"
+    )?;
+    writeln!(writer, "  {BIN_NAME} oci show [--json] <identifier>")?;
+    writeln!(
+        writer,
+        "  {BIN_NAME} oci pull [--output <path>] <identifier>"
+    )?;
+    writeln!(writer, "  {BIN_NAME} catalog add <name> <url>")?;
+    writeln!(writer, "  {BIN_NAME} catalog list [--json]")?;
+    writeln!(writer, "  {BIN_NAME} catalog remove <name-or-url>")?;
+    writeln!(writer, "  {BIN_NAME} catalog update <name>")?;
+    writeln!(
+        writer,
+        "  {BIN_NAME} search [--regex] [-n <limit>] [--json] <keyword>"
+    )?;
+    writeln!(
+        writer,
+        "  {BIN_NAME} show [--scope <catalog-name>] [--json] <identifier>"
+    )?;
+    writeln!(writer, "  {BIN_NAME} pull [--output <path>] <identifier>")?;
     writeln!(writer, "  {BIN_NAME} help")?;
     writeln!(writer, "  {BIN_NAME} version")?;
     writeln!(writer)?;
@@ -1525,12 +1875,12 @@ mod tests {
 
     #[test]
     fn prints_version() {
-        let (exit_code, stdout, stderr) = run_command(["ai-catalog-cli", "version"], "");
+        let (exit_code, stdout, stderr) = run_command(["ai-catalog", "version"], "");
 
         assert_eq!(exit_code, 0);
         assert_eq!(
             stdout,
-            format!("ai-catalog-cli {}\n", env!("CARGO_PKG_VERSION"))
+            format!("ai-catalog {}\n", env!("CARGO_PKG_VERSION"))
         );
         assert!(stderr.is_empty());
     }
@@ -1622,7 +1972,7 @@ mod tests {
         {
             "identifier": "urn:example:model",
             "displayName": "Example Model",
-            "mediaType": "application/json",
+            "type": "application/json",
             "url": "https://example.com/model.json",
             "data": {}
         }
@@ -1645,7 +1995,7 @@ mod tests {
         {
             "identifier": "urn:example:model",
             "displayName": "Example Model",
-            "mediaType": "application/json",
+            "type": "application/json",
             "url": "https://example.com/model.json",
             "data": {}
         }
@@ -1750,7 +2100,7 @@ mod tests {
         {
             "identifier": "urn:example:model",
             "displayName": "Example Model",
-            "mediaType": "application/json",
+            "type": "application/json",
             "url": "https://example.com/model.json",
             "trustManifest": {
                 "identity": "plain-identifier",
@@ -1865,7 +2215,7 @@ mod tests {
         {
             "identifier": "urn:example:model",
             "displayName": "Example Model",
-            "mediaType": "application/json",
+            "type": "application/json",
             "data": { "name": "example" },
             "trustManifest": {
                 "identity": "urn:example:model"

@@ -23,7 +23,8 @@ pub struct AiCatalog {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HostInfo {
-    pub display_name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub identifier: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -40,8 +41,10 @@ pub struct HostInfo {
 #[serde(rename_all = "camelCase")]
 pub struct CatalogEntry {
     pub identifier: String,
-    pub display_name: String,
-    pub media_type: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
+    #[serde(rename = "type")]
+    pub entry_type: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -62,6 +65,12 @@ pub struct CatalogEntry {
     pub metadata: Option<BTreeMap<String, Value>>,
     #[serde(flatten, default)]
     pub extra_fields: BTreeMap<String, Value>,
+}
+
+impl CatalogEntry {
+    pub fn is_nested_catalog(&self) -> bool {
+        self.entry_type == "application/ai-catalog+json"
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
