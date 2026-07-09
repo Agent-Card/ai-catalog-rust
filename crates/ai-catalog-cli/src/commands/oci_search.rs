@@ -29,8 +29,14 @@ pub async fn execute(
             .filter(|resolved| {
                 let e = &resolved.entry;
                 re.is_match(&e.identifier)
-                    || e.display_name.as_deref().map(|s| re.is_match(s)).unwrap_or(false)
-                    || e.description.as_deref().map(|s| re.is_match(s)).unwrap_or(false)
+                    || e.display_name
+                        .as_deref()
+                        .map(|s| re.is_match(s))
+                        .unwrap_or(false)
+                    || e.description
+                        .as_deref()
+                        .map(|s| re.is_match(s))
+                        .unwrap_or(false)
                     || e.tags.iter().any(|t| re.is_match(t))
             })
             .take(limit)
@@ -42,8 +48,14 @@ pub async fn execute(
             .filter(|resolved| {
                 let e = &resolved.entry;
                 e.identifier.to_lowercase().contains(&kw)
-                    || e.display_name.as_deref().map(|s| s.to_lowercase().contains(&kw)).unwrap_or(false)
-                    || e.description.as_deref().map(|s| s.to_lowercase().contains(&kw)).unwrap_or(false)
+                    || e.display_name
+                        .as_deref()
+                        .map(|s| s.to_lowercase().contains(&kw))
+                        .unwrap_or(false)
+                    || e.description
+                        .as_deref()
+                        .map(|s| s.to_lowercase().contains(&kw))
+                        .unwrap_or(false)
                     || e.tags.iter().any(|t| t.to_lowercase().contains(&kw))
             })
             .take(limit)
@@ -67,13 +79,32 @@ pub async fn execute(
         return Ok(());
     }
 
-    let id_w = matches.iter().map(|re| re.entry.identifier.len()).max().unwrap_or(10).clamp(10, 50);
-    let name_w = matches.iter().map(|re| re.entry.display_name.as_deref().unwrap_or("-").len()).max().unwrap_or(4).clamp(4, 30);
-    let type_w = matches.iter().map(|re| re.entry.entry_type.len()).max().unwrap_or(4).clamp(4, 40);
+    let id_w = matches
+        .iter()
+        .map(|re| re.entry.identifier.len())
+        .max()
+        .unwrap_or(10)
+        .clamp(10, 50);
+    let name_w = matches
+        .iter()
+        .map(|re| re.entry.display_name.as_deref().unwrap_or("-").len())
+        .max()
+        .unwrap_or(4)
+        .clamp(4, 30);
+    let type_w = matches
+        .iter()
+        .map(|re| re.entry.entry_type.len())
+        .max()
+        .unwrap_or(4)
+        .clamp(4, 40);
 
     println!(
         "{:<id_w$}  {:<name_w$}  {:<60}  {:<type_w$}  {}",
-        "IDENTIFIER".bold(), "NAME".bold(), "DESCRIPTION".bold(), "TYPE".bold(), "CATALOG".bold()
+        "IDENTIFIER".bold(),
+        "NAME".bold(),
+        "DESCRIPTION".bold(),
+        "TYPE".bold(),
+        "CATALOG".bold()
     );
     println!("{}", "-".repeat(id_w + name_w + 60 + type_w + 30));
     for re in &matches {
@@ -83,7 +114,9 @@ pub async fn execute(
         let description = truncate(e.description.as_deref().unwrap_or("-"), 60);
         let entry_type = truncate(&e.entry_type, type_w);
         let catalog = truncate(&re.source_catalog_url, 30);
-        println!("{identifier:<id_w$}  {name:<name_w$}  {description:<60}  {entry_type:<type_w$}  {catalog}");
+        println!(
+            "{identifier:<id_w$}  {name:<name_w$}  {description:<60}  {entry_type:<type_w$}  {catalog}"
+        );
     }
     if matches.len() == limit {
         println!(

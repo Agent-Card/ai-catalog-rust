@@ -6,7 +6,7 @@ use colored::Colorize;
 use ai_catalog::CatalogEntry;
 use ai_catalog_oci::{import_layout, unpack_catalog};
 
-use crate::cache::{content_hash, CacheManager};
+use crate::cache::{CacheManager, content_hash};
 use crate::error::{Error, Result};
 use crate::resolver::make_entry_metadata;
 
@@ -18,8 +18,11 @@ use crate::resolver::make_entry_metadata;
 pub async fn execute(name: &str, layout_path: &str, ref_name: Option<&str>) -> Result<()> {
     let tag = ref_name.unwrap_or("latest");
 
-    let artifacts = import_layout(layout_path, ref_name)
-        .map_err(|e| Error::Other(format!("failed to import OCI layout from '{layout_path}': {e}")))?;
+    let artifacts = import_layout(layout_path, ref_name).map_err(|e| {
+        Error::Other(format!(
+            "failed to import OCI layout from '{layout_path}': {e}"
+        ))
+    })?;
 
     let catalog = unpack_catalog(&artifacts)
         .map_err(|e| Error::Other(format!("failed to unpack catalog from OCI layout: {e}")))?;
@@ -53,7 +56,11 @@ pub async fn execute(name: &str, layout_path: &str, ref_name: Option<&str>) -> R
     refs.insert(source_ref.clone(), hash.clone());
     cache.write_refs(&refs)?;
 
-    let entry_count = catalog.entries.iter().filter(|e| !e.is_nested_catalog()).count();
+    let entry_count = catalog
+        .entries
+        .iter()
+        .filter(|e| !e.is_nested_catalog())
+        .count();
     let file_url = cache.object_file_url(&hash);
     let identifier = format!("urn:ai-catalog:oci:{}", &hash[..8]);
 

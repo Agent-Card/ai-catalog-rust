@@ -37,13 +37,29 @@ mod tests {
         let dir = tempfile::TempDir::new().unwrap();
         let path = dir.path().join("refs.json");
         let mut refs = HashMap::new();
-        refs.insert("https://example.com/a.json".to_string(), "hash1".to_string());
-        refs.insert("https://example.com/b.json".to_string(), "hash2".to_string());
+        refs.insert(
+            "https://example.com/a.json".to_string(),
+            "hash1".to_string(),
+        );
+        refs.insert(
+            "https://example.com/b.json".to_string(),
+            "hash2".to_string(),
+        );
         write_refs(&path, &refs).unwrap();
         let read_back = read_refs(&path).unwrap();
         assert_eq!(read_back.len(), 2);
-        assert_eq!(read_back.get("https://example.com/a.json").map(|s| s.as_str()), Some("hash1"));
-        assert_eq!(read_back.get("https://example.com/b.json").map(|s| s.as_str()), Some("hash2"));
+        assert_eq!(
+            read_back
+                .get("https://example.com/a.json")
+                .map(|s| s.as_str()),
+            Some("hash1")
+        );
+        assert_eq!(
+            read_back
+                .get("https://example.com/b.json")
+                .map(|s| s.as_str()),
+            Some("hash2")
+        );
     }
 
     #[test]

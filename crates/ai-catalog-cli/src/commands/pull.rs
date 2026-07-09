@@ -170,7 +170,13 @@ fn safe_filename(stem: &str, ext: &str) -> String {
         .unwrap_or(stem);
     let sanitised: String = base
         .chars()
-        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+        .map(|c| {
+            if c.is_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect();
     format!("{sanitised}.{ext}")
 }

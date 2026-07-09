@@ -142,14 +142,20 @@ mod tests {
     fn content_hash_known_value() {
         // SHA-256 of b"hello" is a fixed value
         let hash = content_hash(b"hello");
-        assert_eq!(hash, "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824");
+        assert_eq!(
+            hash,
+            "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+        );
     }
 
     #[test]
     fn content_hash_empty_input() {
         let hash = content_hash(b"");
         // SHA-256 of empty string
-        assert_eq!(hash, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+        assert_eq!(
+            hash,
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
     }
 
     #[test]
@@ -166,7 +172,10 @@ mod tests {
         assert_eq!(cache.registry_path(), dir.path().join("catalog.json"));
         assert_eq!(cache.refs_path(), dir.path().join("refs.json"));
         assert_eq!(cache.objects_dir(), dir.path().join("objects"));
-        assert_eq!(cache.object_path("abc123"), dir.path().join("objects").join("abc123.json"));
+        assert_eq!(
+            cache.object_path("abc123"),
+            dir.path().join("objects").join("abc123.json")
+        );
     }
 
     #[test]
@@ -185,7 +194,10 @@ mod tests {
         assert_eq!(registry.spec_version, "1.0");
         assert!(registry.entries.is_empty());
         let host = registry.host.unwrap();
-        assert_eq!(host.display_name.as_deref(), Some("ai-catalog local registry"));
+        assert_eq!(
+            host.display_name.as_deref(),
+            Some("ai-catalog local registry")
+        );
     }
 
     #[test]
@@ -204,10 +216,18 @@ mod tests {
         let dir = tempfile::TempDir::new().unwrap();
         let cache = make_cache(&dir);
         let mut refs = HashMap::new();
-        refs.insert("https://example.com/catalog.json".to_string(), "deadbeef".to_string());
+        refs.insert(
+            "https://example.com/catalog.json".to_string(),
+            "deadbeef".to_string(),
+        );
         cache.write_refs(&refs).unwrap();
         let read_back = cache.read_refs().unwrap();
-        assert_eq!(read_back.get("https://example.com/catalog.json").map(|s| s.as_str()), Some("deadbeef"));
+        assert_eq!(
+            read_back
+                .get("https://example.com/catalog.json")
+                .map(|s| s.as_str()),
+            Some("deadbeef")
+        );
     }
 
     #[test]

@@ -32,11 +32,7 @@ pub async fn execute(name: &str) -> Result<()> {
         .as_ref()
         .and_then(|m| m.get("sourceUrl"))
         .and_then(|v| v.as_str())
-        .ok_or_else(|| {
-            Error::Other(format!(
-                "catalog \"{name}\" has no sourceUrl in metadata"
-            ))
-        })?
+        .ok_or_else(|| Error::Other(format!("catalog \"{name}\" has no sourceUrl in metadata")))?
         .to_string();
     let old_hash = registry.entries[idx]
         .metadata
@@ -59,11 +55,9 @@ pub async fn execute(name: &str) -> Result<()> {
     let file_url = cache.object_file_url(&new_hash);
     let meta_val = make_entry_metadata(&source_url, &new_hash, entry_count);
     registry.entries[idx].url = Some(file_url);
-    registry.entries[idx].identifier =
-        format!("urn:ai-catalog:local:{}", &new_hash[..8]);
+    registry.entries[idx].identifier = format!("urn:ai-catalog:local:{}", &new_hash[..8]);
     registry.entries[idx].updated_at = Some(chrono::Utc::now().to_rfc3339());
-    registry.entries[idx].metadata =
-        Some(serde_json::from_value(meta_val).unwrap_or_default());
+    registry.entries[idx].metadata = Some(serde_json::from_value(meta_val).unwrap_or_default());
     cache.write_registry(&registry)?;
     println!(
         "{} ({entry_count} entries, hash {})",

@@ -165,9 +165,8 @@ fn catalog_add_then_list_shows_entry() {
     let catalog_dir = tempfile::TempDir::new().unwrap();
     let catalog_url = write_fixture_catalog(catalog_dir.path());
 
-    let (ok, _, stderr) = run(
-        cmd_with_home(home.path()).args(["catalog", "add", "my-test-catalog", &catalog_url]),
-    );
+    let (ok, _, stderr) =
+        run(cmd_with_home(home.path()).args(["catalog", "add", "my-test-catalog", &catalog_url]));
     assert!(ok, "catalog add failed: {stderr}");
 
     let (ok, stdout, _) = run(cmd_with_home(home.path()).args(["catalog", "list"]));
@@ -183,8 +182,7 @@ fn catalog_add_then_list_json_contains_entry() {
 
     run(cmd_with_home(home.path()).args(["catalog", "add", "json-test", &catalog_url]));
 
-    let (ok, stdout, _) =
-        run(cmd_with_home(home.path()).args(["catalog", "list", "--json"]));
+    let (ok, stdout, _) = run(cmd_with_home(home.path()).args(["catalog", "list", "--json"]));
     assert!(ok);
     let v: Value = serde_json::from_str(&stdout).unwrap();
     let entries = v["entries"].as_array().unwrap();
@@ -215,8 +213,7 @@ fn catalog_add_then_remove_clears_list() {
     let catalog_url = write_fixture_catalog(catalog_dir.path());
 
     run(cmd_with_home(home.path()).args(["catalog", "add", "to-remove", &catalog_url]));
-    let (ok, _, stderr) =
-        run(cmd_with_home(home.path()).args(["catalog", "remove", "to-remove"]));
+    let (ok, _, stderr) = run(cmd_with_home(home.path()).args(["catalog", "remove", "to-remove"]));
     assert!(ok, "catalog remove failed: {stderr}");
 
     let (ok, stdout, _) = run(cmd_with_home(home.path()).args(["catalog", "list"]));
@@ -255,8 +252,7 @@ fn catalog_update_existing_succeeds() {
 #[test]
 fn catalog_update_nonexistent_fails() {
     let home = tempfile::TempDir::new().unwrap();
-    let (ok, _, stderr) =
-        run(cmd_with_home(home.path()).args(["catalog", "update", "ghost"]));
+    let (ok, _, stderr) = run(cmd_with_home(home.path()).args(["catalog", "update", "ghost"]));
     assert!(!ok);
     assert!(
         stderr.contains("ghost") || stderr.contains("not found"),
@@ -296,17 +292,17 @@ fn search_json_after_add_returns_valid_catalog() {
 
     run(cmd_with_home(home.path()).args(["catalog", "add", "search-json", &catalog_url]));
 
-    let (ok, stdout, _) =
-        run(cmd_with_home(home.path()).args(["search", "--json", "dataset"]));
+    let (ok, stdout, _) = run(cmd_with_home(home.path()).args(["search", "--json", "dataset"]));
     assert!(ok);
     let v: Value = serde_json::from_str(&stdout).expect("search --json should emit JSON");
     assert_eq!(v["specVersion"], "1.0");
     let entries = v["entries"].as_array().unwrap();
     assert!(!entries.is_empty());
-    assert!(entries.iter().any(|e| e["identifier"]
-        .as_str()
-        .unwrap_or("")
-        .contains("beta")));
+    assert!(
+        entries
+            .iter()
+            .any(|e| e["identifier"].as_str().unwrap_or("").contains("beta"))
+    );
 }
 
 #[test]
@@ -382,7 +378,10 @@ fn catalog_missing_subcommand_fails() {
     let home = tempfile::TempDir::new().unwrap();
     let (ok, _, stderr) = run(cmd_with_home(home.path()).arg("catalog"));
     assert!(!ok);
-    assert!(stderr.contains("subcommand"), "should mention subcommand: {stderr}");
+    assert!(
+        stderr.contains("subcommand"),
+        "should mention subcommand: {stderr}"
+    );
 }
 
 #[test]
@@ -390,7 +389,10 @@ fn search_missing_keyword_fails() {
     let home = tempfile::TempDir::new().unwrap();
     let (ok, _, stderr) = run(cmd_with_home(home.path()).arg("search"));
     assert!(!ok);
-    assert!(stderr.contains("usage") || stderr.contains("keyword"), "{stderr}");
+    assert!(
+        stderr.contains("usage") || stderr.contains("keyword"),
+        "{stderr}"
+    );
 }
 
 #[test]
@@ -398,7 +400,10 @@ fn show_missing_identifier_fails() {
     let home = tempfile::TempDir::new().unwrap();
     let (ok, _, stderr) = run(cmd_with_home(home.path()).arg("show"));
     assert!(!ok);
-    assert!(stderr.contains("usage") || stderr.contains("identifier"), "{stderr}");
+    assert!(
+        stderr.contains("usage") || stderr.contains("identifier"),
+        "{stderr}"
+    );
 }
 
 #[test]
@@ -406,5 +411,8 @@ fn pull_missing_identifier_fails() {
     let home = tempfile::TempDir::new().unwrap();
     let (ok, _, stderr) = run(cmd_with_home(home.path()).arg("pull"));
     assert!(!ok);
-    assert!(stderr.contains("usage") || stderr.contains("identifier"), "{stderr}");
+    assert!(
+        stderr.contains("usage") || stderr.contains("identifier"),
+        "{stderr}"
+    );
 }

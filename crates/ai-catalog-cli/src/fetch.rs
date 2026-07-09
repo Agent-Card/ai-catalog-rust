@@ -20,7 +20,13 @@ pub async fn fetch_bytes(url: &str, client: &Client) -> Result<Vec<u8>> {
     if let Some(path) = url.strip_prefix("file://") {
         return Ok(tokio::fs::read(Path::new(path)).await?);
     }
-    let bytes = client.get(url).send().await?.error_for_status()?.bytes().await?;
+    let bytes = client
+        .get(url)
+        .send()
+        .await?
+        .error_for_status()?
+        .bytes()
+        .await?;
     Ok(bytes.to_vec())
 }
 
@@ -84,7 +90,8 @@ mod tests {
     #[tokio::test]
     async fn fetch_bytes_fails_for_missing_file() {
         let client = build_client().unwrap();
-        let result = fetch_bytes("file:///nonexistent/path/that/does/not/exist.json", &client).await;
+        let result =
+            fetch_bytes("file:///nonexistent/path/that/does/not/exist.json", &client).await;
         assert!(result.is_err());
     }
 }
