@@ -3,6 +3,7 @@
 
 use std::collections::BTreeMap;
 
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -18,6 +19,58 @@ pub struct AiCatalog {
     pub metadata: Option<BTreeMap<String, Value>>,
     #[serde(flatten, default)]
     pub extra_fields: BTreeMap<String, Value>,
+}
+
+impl AiCatalog {
+    /// Returns the first entry whose `identifier` exactly matches `id`.
+    pub fn get_by_id(&self, id: &str) -> Option<&CatalogEntry> {
+        self.entries.iter().find(|e| e.identifier == id)
+    }
+
+    /// Returns all entries where `query` appears (case-insensitively) in the
+    /// `identifier`, `displayName`, `description`, or any `tags` value.
+    pub fn search(&self, query: &str) -> Vec<&CatalogEntry> {
+        let q = query.to_lowercase();
+        self.entries
+            .iter()
+            .filter(|e| {
+                e.identifier.to_lowercase().contains(&q)
+                    || e.display_name
+                        .as_deref()
+                        .map(|s| s.to_lowercase().contains(&q))
+                        .unwrap_or(false)
+                    || e.description
+                        .as_deref()
+                        .map(|s| s.to_lowercase().contains(&q))
+                        .unwrap_or(false)
+                    || e.tags.iter().any(|t| t.to_lowercase().contains(&q))
+            })
+            .collect()
+    }
+
+    /// Returns all entries where `pattern` matches the `identifier`,
+    /// `displayName`, `description`, or any `tags` value.
+    /// Returns an error if `pattern` is not a valid regular expression.
+    pub fn search_by_regex(&self, pattern: &str) -> Result<Vec<&CatalogEntry>, crate::Error> {
+        let re = Regex::new(pattern)?;
+        let matches = self
+            .entries
+            .iter()
+            .filter(|e| {
+                re.is_match(&e.identifier)
+                    || e.display_name
+                        .as_deref()
+                        .map(|s| re.is_match(s))
+                        .unwrap_or(false)
+                    || e.description
+                        .as_deref()
+                        .map(|s| re.is_match(s))
+                        .unwrap_or(false)
+                    || e.tags.iter().any(|t| re.is_match(t))
+            })
+            .collect();
+        Ok(matches)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

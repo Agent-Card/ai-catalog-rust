@@ -49,8 +49,8 @@ mod tests {
     use std::io::Cursor;
 
     use super::{
-        Error, parse_file, parse_reader, parse_slice, parse_str, to_string, to_string_pretty,
-        write_writer,
+        AiCatalog, Error, parse_file, parse_reader, parse_slice, parse_str, to_string,
+        to_string_pretty, write_writer,
     };
 
     fn canonical_fixture() -> String {
@@ -117,6 +117,138 @@ mod tests {
         assert!(matches!(
             parse_file("/definitely/missing/catalog.json"),
             Err(Error::Io(_))
+        ));
+    }
+
+    fn sample_catalog() -> AiCatalog {
+        parse_str(
+            r#"{
+                "specVersion": "1.0",
+                "entries": [
+                    {
+                        "identifier": "urn:example:agent:finance-v1",
+                        "displayName": "Finance Agent",
+                        "type": "application/a2a-agent-card+json",
+                        "description": "Handles financial queries",
+                        "tags": ["finance", "banking"],
+                        "url": "https://example.com/finance.json"
+                    },
+                    {
+                        "identifier": "urn:example:data:nlp-corpus",
+                        "displayName": "NLP Corpus",
+                        "type": "application/octet-stream",
+                        "description": "Large language model training data",
+                        "tags": ["nlp", "dataset"],
+                        "url": "https://example.com/nlp.bin"
+                    },
+                    {
+                        "identifier": "urn:example:model:embedding-v2",
+                        "type": "application/gguf",
+                        "url": "https://example.com/embed.gguf"
+                    }
+                ]
+            }"#,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn get_by_id_returns_matching_entry() {
+        let catalog = sample_catalog();
+        let entry = catalog.get_by_id("urn:example:agent:finance-v1").unwrap();
+        assert_eq!(entry.identifier, "urn:example:agent:finance-v1");
+        assert_eq!(entry.display_name.as_deref(), Some("Finance Agent"));
+    }
+
+    #[test]
+    fn get_by_id_returns_none_for_unknown_id() {
+        let catalog = sample_catalog();
+        assert!(catalog.get_by_id("urn:does:not:exist").is_none());
+    }
+
+    #[test]
+    fn get_by_id_is_exact_match_only() {
+        let catalog = sample_catalog();
+        assert!(catalog.get_by_id("finance").is_none());
+        assert!(catalog.get_by_id("urn:example:agent:finance").is_none());
+    }
+
+    #[test]
+    fn search_matches_identifier_substring() {
+        let catalog = sample_catalog();
+        let results = catalog.search("nlp-corpus");
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].identifier, "urn:example:data:nlp-corpus");
+    }
+
+    #[test]
+    fn search_is_case_insensitive() {
+        let catalog = sample_catalog();
+        let results = catalog.search("FINANCE");
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].identifier, "urn:example:agent:finance-v1");
+    }
+
+    #[test]
+    fn search_matches_display_name() {
+        let catalog = sample_catalog();
+        let results = catalog.search("NLP Corpus");
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].identifier, "urn:example:data:nlp-corpus");
+    }
+
+    #[test]
+    fn search_matches_description() {
+        let catalog = sample_catalog();
+        let results = catalog.search("financial queries");
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].identifier, "urn:example:agent:finance-v1");
+    }
+
+    #[test]
+    fn search_matches_tags() {
+        let catalog = sample_catalog();
+        let results = catalog.search("dataset");
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].identifier, "urn:example:data:nlp-corpus");
+    }
+
+    #[test]
+    fn search_returns_multiple_matches() {
+        let catalog = sample_catalog();
+        let results = catalog.search("urn:example");
+        assert_eq!(results.len(), 3);
+    }
+
+    #[test]
+    fn search_returns_empty_for_no_match() {
+        let catalog = sample_catalog();
+        assert!(catalog.search("xyzzy-not-found").is_empty());
+    }
+
+    #[test]
+    fn search_by_regex_matches_pattern() {
+        let catalog = sample_catalog();
+        let results = catalog
+            .search_by_regex(r"urn:example:(agent|data):.*")
+            .unwrap();
+        assert_eq!(results.len(), 2);
+    }
+
+    #[test]
+    fn search_by_regex_anchored_identifier() {
+        let catalog = sample_catalog();
+        let results = catalog.search_by_regex(r"^urn:example:model:").unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].identifier, "urn:example:model:embedding-v2");
+    }
+
+    #[test]
+    fn search_by_regex_returns_error_on_invalid_pattern() {
+        let catalog = sample_catalog();
+        assert!(matches!(
+            catalog.search_by_regex("[invalid("),
+            Err(Error::Regex(_))
         ));
     }
 }

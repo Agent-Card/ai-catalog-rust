@@ -9,6 +9,8 @@ pub enum Error {
     Io(#[from] std::io::Error),
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
+    #[error("regex error: {0}")]
+    Regex(#[from] regex::Error),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
