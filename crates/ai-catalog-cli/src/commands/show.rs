@@ -7,65 +7,162 @@ use ai_catalog::{AiCatalog, CatalogEntry};
 
 use crate::cache::CacheManager;
 use crate::error::{Error, Result};
+use crate::fetch::build_client;
 use crate::resolver::{
-    find_entry_by_id_in_registry, find_entry_by_id_in_url, resolve_catalog_leaf_entries,
+    find_entry_by_id_in_registry, find_entry_by_id_in_url, resolve_and_cache,
+    resolve_catalog_leaf_entries,
 };
 
 use super::OutputFormat;
 
+const CATALOG_MIME_TYPE: &str = "application/ai-catalog+json";
+
 /// Show full details of a catalog entry by identifier.
 ///
-/// `scope` optionally restricts the search to a specific registered catalog
-/// (by name or source URL). If omitted, the entire local registry is searched.
-pub async fn execute(identifier: &str, output: OutputFormat, scope: Option<&str>) -> Result<()> {
+/// `scope` restricts the search to a specific catalog (by registered name or URI).
+/// `media_type` disambiguates when the entry resolves to a catalog:
+///   - None or "application/ai-catalog+json" → show the catalog entry itself
+///   - other → find the single child entry of that type and show it
+pub async fn execute(
+    identifier: &str,
+    output: OutputFormat,
+    scope: Option<&str>,
+    media_type: Option<&str>,
+) -> Result<()> {
     let cache = CacheManager::new()?;
+    let client = build_client()?;
 
-    let entry = if let Some(scope_name) = scope {
-        find_entry_in_scope(identifier, scope_name, &cache)?
+    let entry = if let Some(scope_val) = scope {
+        find_entry_in_scope(identifier, scope_val, &cache, &client).await?
     } else {
         find_entry_by_id_in_registry(identifier, &cache)?
     };
 
     let entry = entry.ok_or_else(|| Error::EntryNotFound(identifier.to_string()))?;
 
-    if let OutputFormat::Json = output {
-        println!("{}", serde_json::to_string_pretty(&entry)?);
-        return Ok(());
-    }
-
-    print_entry_table(&entry, &cache);
-    Ok(())
+    dispatch_show_entry(&entry, output, media_type, &cache).await
 }
 
-fn find_entry_in_scope(
-    identifier: &str,
-    scope_name: &str,
+/// Core dispatch: handle media_type gating and catalog-vs-leaf branching.
+/// Also used by `oci_show`.
+pub(crate) async fn dispatch_show_entry(
+    entry: &CatalogEntry,
+    output: OutputFormat,
+    media_type: Option<&str>,
     cache: &CacheManager,
+) -> Result<()> {
+    if !entry.is_nested_catalog() {
+        // Leaf entry — check media_type guard
+        if let Some(mt) = media_type
+            && entry.entry_type != mt
+        {
+            return Err(Error::Other(format!(
+                "entry \"{}\" has type \"{}\" but --media-type \"{}\" was requested",
+                entry.identifier, entry.entry_type, mt
+            )));
+        }
+        return print_entry(entry, &output, cache);
+    }
+
+    // Catalog entry — branch on --media-type
+    match media_type {
+        None | Some(CATALOG_MIME_TYPE) => print_entry(entry, &output, cache),
+        Some(mt) => {
+            let leaves = catalog_leaf_entries_for_entry(entry, cache)?;
+            let matches: Vec<&_> = leaves.iter().filter(|e| e.entry.entry_type == mt).collect();
+            match matches.len() {
+                0 => Err(Error::EntryNotFound(format!(
+                    "no entries of type \"{mt}\" found in catalog \"{}\"",
+                    entry.identifier
+                ))),
+                1 => print_entry(&matches[0].entry, &output, cache),
+                n => Err(Error::Other(format!(
+                    "{n} entries of type \"{mt}\" found in catalog \"{}\"; \
+                     use --scope to narrow the search",
+                    entry.identifier
+                ))),
+            }
+        }
+    }
+}
+
+/// Resolve an entry within a specific scope (registered name or URI).
+async fn find_entry_in_scope(
+    identifier: &str,
+    scope: &str,
+    cache: &CacheManager,
+    client: &reqwest::Client,
 ) -> Result<Option<CatalogEntry>> {
-    let registry = cache.read_registry()?;
-    // Find the registry entry matching the scope name or source URL
-    let catalog_entry = registry.entries.iter().find(|e| {
-        e.display_name
-            .as_deref()
-            .map(|n| n.eq_ignore_ascii_case(scope_name))
-            .unwrap_or(false)
-            || e.metadata
-                .as_ref()
-                .and_then(|m| m.get("sourceUrl"))
-                .and_then(|v| v.as_str())
-                .map(|s| s.eq_ignore_ascii_case(scope_name))
+    if scope.contains("://") {
+        // Treat as a URI
+        if scope.starts_with("file://") {
+            find_entry_by_id_in_url(identifier, scope, cache)
+        } else {
+            // http/https — fetch and cache, then search
+            cache.ensure_dirs()?;
+            resolve_and_cache(scope, client, cache).await?;
+            let url_to_hash = cache.read_refs()?;
+            if let Some(hash) = url_to_hash.get(scope) {
+                find_entry_by_id_in_url(identifier, &cache.object_file_url(hash), cache)
+            } else {
+                Ok(None)
+            }
+        }
+    } else {
+        // Treat as a registered catalog name or sourceUrl metadata
+        let registry = cache.read_registry()?;
+        let catalog_entry = registry.entries.iter().find(|e| {
+            e.display_name
+                .as_deref()
+                .map(|n| n.eq_ignore_ascii_case(scope))
                 .unwrap_or(false)
-    });
-    let catalog_entry = catalog_entry.ok_or_else(|| {
-        Error::CatalogNotFound(format!(
-            "no catalog matching \"{scope_name}\" found. Use `ai-catalog catalog list` to see registered catalogs."
+                || e.metadata
+                    .as_ref()
+                    .and_then(|m| m.get("sourceUrl"))
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.eq_ignore_ascii_case(scope))
+                    .unwrap_or(false)
+        });
+        let catalog_entry = catalog_entry.ok_or_else(|| {
+            Error::CatalogNotFound(format!(
+                "no catalog matching \"{scope}\" found. Use `ai-catalog catalog list` to see registered catalogs."
+            ))
+        })?;
+        let file_url = catalog_entry
+            .url
+            .as_deref()
+            .ok_or_else(|| Error::Other(format!("catalog \"{scope}\" has no local file URL")))?;
+        find_entry_by_id_in_url(identifier, file_url, cache)
+    }
+}
+
+/// Get the leaf entries of a catalog entry using only the local cache.
+fn catalog_leaf_entries_for_entry(
+    entry: &CatalogEntry,
+    cache: &CacheManager,
+) -> Result<Vec<crate::resolver::ResolvedEntry>> {
+    let file_url = entry.url.as_deref().ok_or_else(|| {
+        Error::Other(format!("catalog entry \"{}\" has no URL", entry.identifier))
+    })?;
+
+    let path = file_url.strip_prefix("file://").unwrap_or(file_url);
+    let bytes = std::fs::read(path).map_err(|e| {
+        Error::Io(std::io::Error::new(
+            e.kind(),
+            format!("cannot read cached catalog at {file_url}: {e}"),
         ))
     })?;
-    let file_url = catalog_entry
-        .url
-        .as_deref()
-        .ok_or_else(|| Error::Other(format!("catalog \"{scope_name}\" has no local file URL")))?;
-    find_entry_by_id_in_url(identifier, file_url, cache)
+    let catalog: AiCatalog = serde_json::from_slice(&bytes)?;
+    resolve_catalog_leaf_entries(&catalog, file_url, cache)
+}
+
+fn print_entry(entry: &CatalogEntry, output: &OutputFormat, cache: &CacheManager) -> Result<()> {
+    if let OutputFormat::Json = output {
+        println!("{}", serde_json::to_string_pretty(entry)?);
+        return Ok(());
+    }
+    print_entry_table(entry, cache);
+    Ok(())
 }
 
 pub(crate) fn print_entry_table(entry: &CatalogEntry, cache: &CacheManager) {

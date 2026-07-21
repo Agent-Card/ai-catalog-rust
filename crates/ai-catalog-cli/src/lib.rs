@@ -255,6 +255,7 @@ fn search_command<E: Write>(args: &[String], stderr: &mut E) -> io::Result<i32> 
 fn show_command<E: Write>(args: &[String], stderr: &mut E) -> io::Result<i32> {
     let mut identifier = None;
     let mut scope: Option<String> = None;
+    let mut media_type: Option<String> = None;
     let mut is_json = false;
     let mut iter = args.iter();
     while let Some(arg) = iter.next() {
@@ -263,36 +264,8 @@ fn show_command<E: Write>(args: &[String], stderr: &mut E) -> io::Result<i32> {
             "--scope" | "-s" => {
                 scope = iter.next().map(|s| s.to_string());
             }
-            s if !s.starts_with('-') => identifier = Some(s.to_string()),
-            _ => {}
-        }
-    }
-    let Some(identifier) = identifier else {
-        writeln!(
-            stderr,
-            "usage: {BIN_NAME} show [--scope <catalog-name>] [--json] <identifier>"
-        )?;
-        return Ok(2);
-    };
-    let fmt = if is_json {
-        commands::OutputFormat::Json
-    } else {
-        commands::OutputFormat::Table
-    };
-    match run_consumer(commands::show::execute(&identifier, fmt, scope.as_deref())) {
-        Ok(()) => Ok(0),
-        Err(e) => consumer_error_to_io(e, stderr),
-    }
-}
-
-fn pull_command<E: Write>(args: &[String], stderr: &mut E) -> io::Result<i32> {
-    let mut identifier = None;
-    let mut output_path: Option<String> = None;
-    let mut iter = args.iter();
-    while let Some(arg) = iter.next() {
-        match arg.as_str() {
-            "--output" | "-o" => {
-                output_path = iter.next().map(|s| s.to_string());
+            "--media-type" | "-m" => {
+                media_type = iter.next().map(|s| s.to_string());
             }
             s if !s.starts_with('-') => identifier = Some(s.to_string()),
             _ => {}
@@ -301,11 +274,60 @@ fn pull_command<E: Write>(args: &[String], stderr: &mut E) -> io::Result<i32> {
     let Some(identifier) = identifier else {
         writeln!(
             stderr,
-            "usage: {BIN_NAME} pull [--output <path>] <identifier>"
+            "usage: {BIN_NAME} show [--scope <catalog-name-or-url>] [--json] [--media-type <type>] <identifier>"
         )?;
         return Ok(2);
     };
-    match run_consumer(commands::pull::execute(&identifier, output_path.as_deref())) {
+    let fmt = if is_json {
+        commands::OutputFormat::Json
+    } else {
+        commands::OutputFormat::Table
+    };
+    match run_consumer(commands::show::execute(
+        &identifier,
+        fmt,
+        scope.as_deref(),
+        media_type.as_deref(),
+    )) {
+        Ok(()) => Ok(0),
+        Err(e) => consumer_error_to_io(e, stderr),
+    }
+}
+
+fn pull_command<E: Write>(args: &[String], stderr: &mut E) -> io::Result<i32> {
+    let mut identifier = None;
+    let mut output_path: Option<String> = None;
+    let mut scope: Option<String> = None;
+    let mut media_type: Option<String> = None;
+    let mut iter = args.iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--output" | "-o" => {
+                output_path = iter.next().map(|s| s.to_string());
+            }
+            "--scope" | "-s" => {
+                scope = iter.next().map(|s| s.to_string());
+            }
+            "--media-type" | "-m" => {
+                media_type = iter.next().map(|s| s.to_string());
+            }
+            s if !s.starts_with('-') => identifier = Some(s.to_string()),
+            _ => {}
+        }
+    }
+    let Some(identifier) = identifier else {
+        writeln!(
+            stderr,
+            "usage: {BIN_NAME} pull [--output <path>] [--scope <catalog-name-or-url>] [--media-type <type>] <identifier>"
+        )?;
+        return Ok(2);
+    };
+    match run_consumer(commands::pull::execute(
+        &identifier,
+        output_path.as_deref(),
+        scope.as_deref(),
+        media_type.as_deref(),
+    )) {
         Ok(()) => Ok(0),
         Err(e) => consumer_error_to_io(e, stderr),
     }
@@ -770,36 +792,13 @@ fn oci_search_command<E: Write>(args: &[String], stderr: &mut E) -> io::Result<i
 fn oci_show_command<E: Write>(args: &[String], stderr: &mut E) -> io::Result<i32> {
     let mut identifier = None;
     let mut is_json = false;
-    for arg in args {
-        match arg.as_str() {
-            "--json" | "-j" => is_json = true,
-            s if !s.starts_with('-') => identifier = Some(s.to_string()),
-            _ => {}
-        }
-    }
-    let Some(identifier) = identifier else {
-        writeln!(stderr, "usage: {BIN_NAME} oci show [--json] <identifier>")?;
-        return Ok(2);
-    };
-    let fmt = if is_json {
-        commands::OutputFormat::Json
-    } else {
-        commands::OutputFormat::Table
-    };
-    match run_consumer(commands::oci_show::execute(&identifier, fmt)) {
-        Ok(()) => Ok(0),
-        Err(e) => consumer_error_to_io(e, stderr),
-    }
-}
-
-fn oci_pull_command<E: Write>(args: &[String], stderr: &mut E) -> io::Result<i32> {
-    let mut identifier = None;
-    let mut output_path: Option<String> = None;
+    let mut media_type: Option<String> = None;
     let mut iter = args.iter();
     while let Some(arg) = iter.next() {
         match arg.as_str() {
-            "--output" | "-o" => {
-                output_path = iter.next().map(|s| s.to_string());
+            "--json" | "-j" => is_json = true,
+            "--media-type" | "-m" => {
+                media_type = iter.next().map(|s| s.to_string());
             }
             s if !s.starts_with('-') => identifier = Some(s.to_string()),
             _ => {}
@@ -808,13 +807,53 @@ fn oci_pull_command<E: Write>(args: &[String], stderr: &mut E) -> io::Result<i32
     let Some(identifier) = identifier else {
         writeln!(
             stderr,
-            "usage: {BIN_NAME} oci pull [--output <path>] <identifier>"
+            "usage: {BIN_NAME} oci show [--json] [--media-type <type>] <identifier>"
+        )?;
+        return Ok(2);
+    };
+    let fmt = if is_json {
+        commands::OutputFormat::Json
+    } else {
+        commands::OutputFormat::Table
+    };
+    match run_consumer(commands::oci_show::execute(
+        &identifier,
+        fmt,
+        media_type.as_deref(),
+    )) {
+        Ok(()) => Ok(0),
+        Err(e) => consumer_error_to_io(e, stderr),
+    }
+}
+
+fn oci_pull_command<E: Write>(args: &[String], stderr: &mut E) -> io::Result<i32> {
+    let mut identifier = None;
+    let mut output_path: Option<String> = None;
+    let mut media_type: Option<String> = None;
+    let mut iter = args.iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--output" | "-o" => {
+                output_path = iter.next().map(|s| s.to_string());
+            }
+            "--media-type" | "-m" => {
+                media_type = iter.next().map(|s| s.to_string());
+            }
+            s if !s.starts_with('-') => identifier = Some(s.to_string()),
+            _ => {}
+        }
+    }
+    let Some(identifier) = identifier else {
+        writeln!(
+            stderr,
+            "usage: {BIN_NAME} oci pull [--output <path>] [--media-type <type>] <identifier>"
         )?;
         return Ok(2);
     };
     match run_consumer(commands::oci_pull::execute(
         &identifier,
         output_path.as_deref(),
+        media_type.as_deref(),
     )) {
         Ok(()) => Ok(0),
         Err(e) => consumer_error_to_io(e, stderr),
@@ -1364,10 +1403,13 @@ fn write_usage(writer: &mut impl Write) -> io::Result<()> {
         writer,
         "  {BIN_NAME} oci search [--regex] [-n <limit>] [--json] <keyword>"
     )?;
-    writeln!(writer, "  {BIN_NAME} oci show [--json] <identifier>")?;
     writeln!(
         writer,
-        "  {BIN_NAME} oci pull [--output <path>] <identifier>"
+        "  {BIN_NAME} oci show [--json] [--media-type <type>] <identifier>"
+    )?;
+    writeln!(
+        writer,
+        "  {BIN_NAME} oci pull [--output <path>] [--media-type <type>] <identifier>"
     )?;
     writeln!(writer, "  {BIN_NAME} catalog add <name> <url>")?;
     writeln!(writer, "  {BIN_NAME} catalog list [--json]")?;
@@ -1379,9 +1421,12 @@ fn write_usage(writer: &mut impl Write) -> io::Result<()> {
     )?;
     writeln!(
         writer,
-        "  {BIN_NAME} show [--scope <catalog-name>] [--json] <identifier>"
+        "  {BIN_NAME} show [--scope <catalog-name-or-url>] [--json] [--media-type <type>] <identifier>"
     )?;
-    writeln!(writer, "  {BIN_NAME} pull [--output <path>] <identifier>")?;
+    writeln!(
+        writer,
+        "  {BIN_NAME} pull [--output <path>] [--scope <catalog-name-or-url>] [--media-type <type>] <identifier>"
+    )?;
     writeln!(writer, "  {BIN_NAME} help")?;
     writeln!(writer, "  {BIN_NAME} version")?;
     writeln!(writer)?;

@@ -416,3 +416,319 @@ fn pull_missing_identifier_fails() {
         "{stderr}"
     );
 }
+
+// ── --media-type tests ────────────────────────────────────────────────────────
+
+/// Write a parent catalog whose single entry is a nested catalog pointing at `child_url`.
+/// Returns the `file://` URL of the parent.
+fn write_nested_catalog(dir: &Path, child_url: &str) -> String {
+    let parent_json = format!(
+        r#"{{
+  "specVersion": "1.0",
+  "entries": [
+    {{
+      "identifier": "urn:test:nested-catalog",
+      "displayName": "Nested Catalog",
+      "type": "application/ai-catalog+json",
+      "url": "{child_url}"
+    }}
+  ]
+}}"#
+    );
+    let path = dir.join("parent-catalog.json");
+    fs::write(&path, parent_json).expect("parent catalog should be writable");
+    format!("file://{}", path.display())
+}
+
+/// Write a child catalog with one entry of type `application/json` (inline data).
+fn write_child_catalog(dir: &Path) -> String {
+    let child_json = r#"{
+  "specVersion": "1.0",
+  "entries": [
+    {
+      "identifier": "urn:test:child-agent",
+      "displayName": "Child Agent",
+      "type": "application/json",
+      "data": {"name": "child"}
+    }
+  ]
+}"#;
+    let path = dir.join("child-catalog.json");
+    fs::write(&path, child_json).expect("child catalog should be writable");
+    format!("file://{}", path.display())
+}
+
+/// Write a child catalog with TWO entries of the same type (for ambiguity tests).
+fn write_child_catalog_two_json(dir: &Path) -> String {
+    let child_json = r#"{
+  "specVersion": "1.0",
+  "entries": [
+    {
+      "identifier": "urn:test:child-a",
+      "type": "application/json",
+      "data": {"name": "a"}
+    },
+    {
+      "identifier": "urn:test:child-b",
+      "type": "application/json",
+      "data": {"name": "b"}
+    }
+  ]
+}"#;
+    let path = dir.join("child-two.json");
+    fs::write(&path, child_json).expect("child catalog (two) should be writable");
+    format!("file://{}", path.display())
+}
+
+#[test]
+fn pull_catalog_entry_without_media_type_errors() {
+    let home = tempfile::TempDir::new().unwrap();
+    let catalog_dir = tempfile::TempDir::new().unwrap();
+    let child_url = write_child_catalog(catalog_dir.path());
+    let child_url = child_url.strip_prefix("file://").unwrap().to_owned();
+    let parent_url = write_nested_catalog(catalog_dir.path(), &child_url);
+
+    run(cmd_with_home(home.path()).args(["catalog", "add", "nested-test", &parent_url]));
+
+    let (ok, _, stderr) = run(cmd_with_home(home.path()).args(["pull", "urn:test:nested-catalog"]));
+    assert!(
+        !ok,
+        "pull should fail when id is a catalog without --media-type"
+    );
+    assert!(
+        stderr.contains("refers to a catalog"),
+        "error should mention catalog: {stderr}"
+    );
+    assert!(
+        stderr.contains("--media-type"),
+        "error should suggest --media-type: {stderr}"
+    );
+}
+
+#[test]
+fn pull_catalog_entry_with_catalog_media_type_writes_file() {
+    let home = tempfile::TempDir::new().unwrap();
+    let catalog_dir = tempfile::TempDir::new().unwrap();
+    let child_url = write_child_catalog(catalog_dir.path());
+    let child_url_path = child_url.strip_prefix("file://").unwrap().to_owned();
+    let parent_url = write_nested_catalog(catalog_dir.path(), &child_url_path);
+
+    run(cmd_with_home(home.path()).args(["catalog", "add", "nested-catalog-mt", &parent_url]));
+
+    let out_dir = tempfile::TempDir::new().unwrap();
+    let (ok, _, stderr) = run(cmd_with_home(home.path()).args([
+        "pull",
+        "--media-type",
+        "application/ai-catalog+json",
+        "--output",
+        out_dir.path().to_str().unwrap(),
+        "urn:test:nested-catalog",
+    ]));
+    assert!(ok, "pull with catalog media-type should succeed: {stderr}");
+    // At least one file should be written
+    let files: Vec<_> = fs::read_dir(out_dir.path())
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .collect();
+    assert!(!files.is_empty(), "output directory should contain a file");
+}
+
+#[test]
+fn pull_catalog_entry_with_child_media_type_pulls_child() {
+    let home = tempfile::TempDir::new().unwrap();
+    let catalog_dir = tempfile::TempDir::new().unwrap();
+    let child_url = write_child_catalog(catalog_dir.path());
+    let child_url_path = child_url.strip_prefix("file://").unwrap().to_owned();
+    let parent_url = write_nested_catalog(catalog_dir.path(), &child_url_path);
+
+    run(cmd_with_home(home.path()).args(["catalog", "add", "nested-child-mt", &parent_url]));
+
+    let out_dir = tempfile::TempDir::new().unwrap();
+    let (ok, _, stderr) = run(cmd_with_home(home.path()).args([
+        "pull",
+        "--media-type",
+        "application/json",
+        "--output",
+        out_dir.path().to_str().unwrap(),
+        "urn:test:nested-catalog",
+    ]));
+    assert!(ok, "pull with child media-type should succeed: {stderr}");
+    let files: Vec<_> = fs::read_dir(out_dir.path())
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .collect();
+    assert!(
+        !files.is_empty(),
+        "output directory should contain the child entry file"
+    );
+}
+
+#[test]
+fn pull_catalog_entry_with_ambiguous_media_type_errors() {
+    let home = tempfile::TempDir::new().unwrap();
+    let catalog_dir = tempfile::TempDir::new().unwrap();
+    let child_url = write_child_catalog_two_json(catalog_dir.path());
+    let child_url_path = child_url.strip_prefix("file://").unwrap().to_owned();
+    let parent_url = write_nested_catalog(catalog_dir.path(), &child_url_path);
+
+    run(cmd_with_home(home.path()).args(["catalog", "add", "ambiguous-mt", &parent_url]));
+
+    let (ok, _, stderr) = run(cmd_with_home(home.path()).args([
+        "pull",
+        "--media-type",
+        "application/json",
+        "urn:test:nested-catalog",
+    ]));
+    assert!(
+        !ok,
+        "pull should fail when multiple children match the media type"
+    );
+    assert!(
+        stderr.contains("2") || stderr.contains("entries of type"),
+        "error should mention multiple matches: {stderr}"
+    );
+}
+
+#[test]
+fn pull_leaf_entry_with_wrong_media_type_errors() {
+    let home = tempfile::TempDir::new().unwrap();
+    let catalog_dir = tempfile::TempDir::new().unwrap();
+    let catalog_url = write_fixture_catalog(catalog_dir.path());
+
+    run(cmd_with_home(home.path()).args(["catalog", "add", "leaf-mt-test", &catalog_url]));
+
+    let (ok, _, stderr) = run(cmd_with_home(home.path()).args([
+        "pull",
+        "--media-type",
+        "text/plain",
+        "urn:test:agent-alpha",
+    ]));
+    assert!(!ok, "pull should fail on type mismatch");
+    assert!(
+        stderr.contains("--media-type") || stderr.contains("type"),
+        "error should mention type mismatch: {stderr}"
+    );
+}
+
+#[test]
+fn show_catalog_entry_without_media_type_succeeds() {
+    let home = tempfile::TempDir::new().unwrap();
+    let catalog_dir = tempfile::TempDir::new().unwrap();
+    let child_url = write_child_catalog(catalog_dir.path());
+    let child_url_path = child_url.strip_prefix("file://").unwrap().to_owned();
+    let parent_url = write_nested_catalog(catalog_dir.path(), &child_url_path);
+
+    run(cmd_with_home(home.path()).args(["catalog", "add", "show-cat-no-mt", &parent_url]));
+
+    let (ok, stdout, stderr) =
+        run(cmd_with_home(home.path()).args(["show", "urn:test:nested-catalog"]));
+    assert!(
+        ok,
+        "show should succeed for a catalog entry without --media-type: {stderr}"
+    );
+    assert!(
+        stdout.contains("urn:test:nested-catalog"),
+        "show output should contain the identifier: {stdout}"
+    );
+}
+
+#[test]
+fn show_catalog_entry_with_child_media_type_shows_child() {
+    let home = tempfile::TempDir::new().unwrap();
+    let catalog_dir = tempfile::TempDir::new().unwrap();
+    let child_url = write_child_catalog(catalog_dir.path());
+    let child_url_path = child_url.strip_prefix("file://").unwrap().to_owned();
+    let parent_url = write_nested_catalog(catalog_dir.path(), &child_url_path);
+
+    run(cmd_with_home(home.path()).args(["catalog", "add", "show-child-mt", &parent_url]));
+
+    let (ok, stdout, stderr) = run(cmd_with_home(home.path()).args([
+        "show",
+        "--media-type",
+        "application/json",
+        "urn:test:nested-catalog",
+    ]));
+    assert!(ok, "show with child media-type should succeed: {stderr}");
+    assert!(
+        stdout.contains("urn:test:child-agent"),
+        "show output should contain the child entry: {stdout}"
+    );
+}
+
+#[test]
+fn show_leaf_entry_with_wrong_media_type_errors() {
+    let home = tempfile::TempDir::new().unwrap();
+    let catalog_dir = tempfile::TempDir::new().unwrap();
+    let catalog_url = write_fixture_catalog(catalog_dir.path());
+
+    run(cmd_with_home(home.path()).args(["catalog", "add", "show-leaf-mt", &catalog_url]));
+
+    let (ok, _, stderr) = run(cmd_with_home(home.path()).args([
+        "show",
+        "--media-type",
+        "text/plain",
+        "urn:test:agent-alpha",
+    ]));
+    assert!(!ok, "show should fail on type mismatch");
+    assert!(
+        stderr.contains("--media-type") || stderr.contains("type"),
+        "error should mention type mismatch: {stderr}"
+    );
+}
+
+// ── --scope URI tests ─────────────────────────────────────────────────────────
+
+#[test]
+fn show_scope_by_file_url_finds_entry() {
+    let home = tempfile::TempDir::new().unwrap();
+    let catalog_dir = tempfile::TempDir::new().unwrap();
+    let catalog_url = write_fixture_catalog(catalog_dir.path());
+
+    // Use --scope with the file:// URL directly, without registering the catalog
+    let (ok, stdout, stderr) = run(cmd_with_home(home.path()).args([
+        "show",
+        "--scope",
+        &catalog_url,
+        "urn:test:agent-alpha",
+    ]));
+    assert!(ok, "show --scope <file-url> should succeed: {stderr}");
+    assert!(
+        stdout.contains("urn:test:agent-alpha"),
+        "output should contain the entry: {stdout}"
+    );
+}
+
+#[test]
+fn pull_scope_by_file_url_pulls_entry() {
+    let home = tempfile::TempDir::new().unwrap();
+    let catalog_dir = tempfile::TempDir::new().unwrap();
+    let child_json = r#"{
+  "specVersion": "1.0",
+  "entries": [
+    {
+      "identifier": "urn:test:scoped-agent",
+      "type": "application/json",
+      "data": {"name": "scoped"}
+    }
+  ]
+}"#;
+    let catalog_path = catalog_dir.path().join("scoped-catalog.json");
+    fs::write(&catalog_path, child_json).unwrap();
+    let catalog_url = format!("file://{}", catalog_path.display());
+
+    let out_dir = tempfile::TempDir::new().unwrap();
+    let (ok, _, stderr) = run(cmd_with_home(home.path()).args([
+        "pull",
+        "--scope",
+        &catalog_url,
+        "--output",
+        out_dir.path().to_str().unwrap(),
+        "urn:test:scoped-agent",
+    ]));
+    assert!(ok, "pull --scope <file-url> should succeed: {stderr}");
+    let files: Vec<_> = fs::read_dir(out_dir.path())
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .collect();
+    assert!(!files.is_empty(), "output should contain the pulled file");
+}
