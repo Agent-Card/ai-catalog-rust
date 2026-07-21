@@ -49,7 +49,7 @@ Accepts HTTP/HTTPS URLs or `file://` paths. Nested catalogs are fetched and cach
 
 ```bash
 ai-catalog search <keyword>             # full-text search across all registered catalogs
-ai-catalog search <keyword> -n 50       # increase result limit (default 25)
+ai-catalog search <keyword> -n 100      # override result limit (default 50)
 ai-catalog search <pattern> --regex     # treat keyword as a regular expression
 ai-catalog search <keyword> --json      # machine-readable output
 ```
@@ -59,20 +59,36 @@ Searches `identifier`, `displayName`, `description`, and `tags`. Works fully off
 ### 3. Inspect an entry
 
 ```bash
-ai-catalog show <identifier>                     # table view
-ai-catalog show <identifier> --json              # full entry JSON
-ai-catalog show <identifier> --scope <catalog>   # scope lookup to one registered catalog
+ai-catalog show <identifier>                              # table view
+ai-catalog show <identifier> --json                       # full entry JSON
+ai-catalog show <identifier> --scope <catalog-name>       # scope to a registered catalog by name
+ai-catalog show <identifier> --scope <url>                # scope to any catalog by URI (file:// or http/https)
+ai-catalog show <identifier> --media-type <mime>          # filter/disambiguate by MIME type
 ```
+
+`--scope` accepts either a registered catalog name or a URI directly. `file://` URIs are read from disk; `http://`/`https://` URIs are fetched and cached on the fly without registering.
+
+`--media-type` on a catalog entry resolves its children and shows the single entry matching that type; `None` or `application/ai-catalog+json` shows the catalog entry itself.
 
 ### 4. Pull an artifact
 
 ```bash
-ai-catalog pull <identifier>                     # write to current directory
-ai-catalog pull <identifier> -o <dir>           # write to a specific directory
-ai-catalog pull <identifier> -o -               # stream to stdout (pipe to jq etc.)
+ai-catalog pull <identifier>                                 # write to current directory
+ai-catalog pull <identifier> -o <dir>                        # write to a specific directory
+ai-catalog pull <identifier> -o -                            # stream artifact bytes to stdout
+ai-catalog pull <identifier> --scope <catalog-name-or-url>   # narrow search to one catalog
+ai-catalog pull <identifier> --media-type <mime>             # required when <id> is a catalog entry
 ```
 
-When `-o -` is used, status messages go to stderr so the artifact bytes on stdout can be piped cleanly.
+**Important:** if `<identifier>` resolves to a catalog entry (type `application/ai-catalog+json`), `pull` **requires** `--media-type`:
+
+| `--media-type` value | Result |
+|---|---|
+| `application/ai-catalog+json` | Write the catalog JSON document itself |
+| `<other>` e.g. `application/json` | Pull the single child entry of that type (error if 0 or >1 match) |
+| *(omitted)* | Error — suggests using `--media-type` |
+
+`--scope` obeys the same URI rules as `show` (name or URI).
 
 ## Common workflows
 
@@ -168,8 +184,8 @@ ai-catalog oci add <name> <layout-dir>
 
 # Search, inspect, and pull from OCI-sourced catalogs only
 ai-catalog oci search <keyword>
-ai-catalog oci show <identifier>
-ai-catalog oci pull <identifier> -o <dir>
+ai-catalog oci show <identifier> [--media-type <mime>]
+ai-catalog oci pull <identifier> -o <dir> [--media-type <mime>]
 ```
 
 ## Trust inspection
