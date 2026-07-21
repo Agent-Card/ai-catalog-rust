@@ -196,9 +196,14 @@ async fn pull_from_url(
         let file_url = cache.object_file_url(hash);
         let path = file_url.strip_prefix("file://").unwrap_or(&file_url);
         let bytes = std::fs::read(path)?;
-        let dest = resolve_output_path(output_path, url, "json");
-        std::fs::write(&dest, &bytes)?;
-        println!("{} written to {}", "✓".green(), dest.display());
+        if output_path == Some("-") {
+            use std::io::Write;
+            std::io::stdout().write_all(&bytes)?;
+        } else {
+            let dest = resolve_output_path(output_path, url, "json");
+            std::fs::write(&dest, &bytes)?;
+            println!("{} written to {}", "✓".green(), dest.display());
+        }
     }
     Ok(())
 }
@@ -233,6 +238,12 @@ async fn write_catalog_entry(
         ))
     })?;
 
+    if output_path == Some("-") {
+        use std::io::Write;
+        std::io::stdout().write_all(&bytes)?;
+        return Ok(());
+    }
+
     let dest = resolve_output_path(output_path, &entry.identifier, "json");
     std::fs::write(&dest, &bytes)?;
     println!(
@@ -245,39 +256,34 @@ async fn write_catalog_entry(
 }
 
 async fn write_data_entry(entry: &CatalogEntry, output_path: Option<&str>) -> Result<()> {
-    if let Some(data) = &entry.data {
-        let bytes = serde_json::to_vec_pretty(data)?;
-        let ext = extension_for_type(&entry.entry_type);
-        let dest = resolve_output_path(output_path, &entry.identifier, ext);
-        std::fs::write(&dest, &bytes)?;
-        println!(
-            "{} \"{}\" written to {}",
-            "✓".green(),
-            entry.identifier.bold(),
-            dest.display()
-        );
-        return Ok(());
-    }
-
-    if let Some(url) = &entry.url {
+    let bytes = if let Some(data) = &entry.data {
+        serde_json::to_vec_pretty(data)?
+    } else if let Some(url) = &entry.url {
         let client = build_client()?;
-        let bytes = crate::fetch::fetch_bytes(url, &client).await?;
-        let ext = extension_for_type(&entry.entry_type);
-        let dest = resolve_output_path(output_path, &entry.identifier, ext);
-        std::fs::write(&dest, &bytes)?;
-        println!(
-            "{} \"{}\" written to {}",
-            "✓".green(),
-            entry.identifier.bold(),
-            dest.display()
-        );
+        crate::fetch::fetch_bytes(url, &client).await?
+    } else {
+        return Err(Error::Other(format!(
+            "entry \"{}\" has neither inline data nor a URL to fetch",
+            entry.identifier
+        )));
+    };
+
+    if output_path == Some("-") {
+        use std::io::Write;
+        std::io::stdout().write_all(&bytes)?;
         return Ok(());
     }
 
-    Err(Error::Other(format!(
-        "entry \"{}\" has neither inline data nor a URL to fetch",
-        entry.identifier
-    )))
+    let ext = extension_for_type(&entry.entry_type);
+    let dest = resolve_output_path(output_path, &entry.identifier, ext);
+    std::fs::write(&dest, &bytes)?;
+    println!(
+        "{} \"{}\" written to {}",
+        "✓".green(),
+        entry.identifier.bold(),
+        dest.display()
+    );
+    Ok(())
 }
 
 fn resolve_output_path(output_path: Option<&str>, stem: &str, ext: &str) -> PathBuf {

@@ -732,3 +732,36 @@ fn pull_scope_by_file_url_pulls_entry() {
         .collect();
     assert!(!files.is_empty(), "output should contain the pulled file");
 }
+
+#[test]
+fn pull_output_stdout_streams_bytes() {
+    let home = tempfile::TempDir::new().unwrap();
+    let catalog_dir = tempfile::TempDir::new().unwrap();
+    let catalog_json = r#"{
+  "specVersion": "1.0",
+  "entries": [
+    {
+      "identifier": "urn:test:stdout-entry",
+      "type": "application/json",
+      "data": {"hello": "world"}
+    }
+  ]
+}"#;
+    let catalog_path = catalog_dir.path().join("stdout-catalog.json");
+    fs::write(&catalog_path, catalog_json).unwrap();
+    let catalog_url = format!("file://{}", catalog_path.display());
+
+    run(cmd_with_home(home.path()).args(["catalog", "add", "stdout-test", &catalog_url]));
+
+    let (ok, stdout, stderr) = run(cmd_with_home(home.path()).args([
+        "pull",
+        "--output",
+        "-",
+        "urn:test:stdout-entry",
+    ]));
+    assert!(ok, "pull -o - should succeed: {stderr}");
+    // stdout should contain JSON bytes, not write a file named "-"
+    let parsed: serde_json::Value =
+        serde_json::from_str(&stdout).expect("stdout should be valid JSON");
+    assert_eq!(parsed["hello"], "world");
+}
