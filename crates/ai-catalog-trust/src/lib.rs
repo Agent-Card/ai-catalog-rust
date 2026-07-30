@@ -1,7 +1,10 @@
 // Copyright AGNTCY Contributors (https://github.com/agntcy)
 // SPDX-License-Identifier: Apache-2.0
 
-use ai_catalog::{AiCatalog, CatalogEntry, HostInfo, TrustManifest};
+use ai_catalog::{
+    AiCatalog, CatalogEntry, HostInfo, TrustManifest, identity_binds_to_entry, identity_domain,
+    publisher_domain,
+};
 use serde_json::{Map, Value};
 use sha2::{Digest as _, Sha256, Sha384, Sha512};
 use thiserror::Error;
@@ -52,6 +55,10 @@ pub struct CatalogTrustReport {
     pub entries: Vec<ManifestReport>,
 }
 
+const SHA256_HEX_LEN: usize = 64;
+const SHA384_HEX_LEN: usize = 96;
+const SHA512_HEX_LEN: usize = 128;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParsedDigest {
     algorithm: String,
@@ -70,15 +77,19 @@ impl ParsedDigest {
 
         let normalized_algorithm = algorithm.to_ascii_lowercase();
 
-        match normalized_algorithm.as_str() {
-            "sha256" | "sha384" | "sha512" => {}
+        let expected_len = match normalized_algorithm.as_str() {
+            "sha256" => SHA256_HEX_LEN,
+            "sha384" => SHA384_HEX_LEN,
+            "sha512" => SHA512_HEX_LEN,
             "md5" | "sha1" | "sha224" => {
                 return Err(Error::WeakDigestAlgorithm(normalized_algorithm));
             }
             _ => return Err(Error::UnsupportedDigestAlgorithm(normalized_algorithm)),
-        }
+        };
 
-        if !hex_value.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        if hex_value.len() != expected_len
+            || !hex_value.bytes().all(|byte| byte.is_ascii_hexdigit())
+        {
             return Err(Error::InvalidDigestHex);
         }
 
@@ -189,13 +200,14 @@ fn analyze_entry_manifest(entry: &CatalogEntry, index: usize) -> Option<Manifest
     let path = format!("catalog.entries[{index}].trustManifest");
     let mut findings = Vec::new();
 
-    if manifest.identity != entry.identifier {
+    if identity_binds_to_entry(&entry.identifier, &manifest.identity) == Some(false) {
         findings.push(Finding {
             severity: Severity::Error,
             path: format!("{path}.identity"),
             message: format!(
-                "trustManifest.identity '{}' MUST match entry identifier '{}'",
-                manifest.identity, entry.identifier
+                "trustManifest.identity domain '{}' MUST align with entry identifier publisher domain '{}'",
+                identity_domain(&manifest.identity).unwrap_or_default(),
+                publisher_domain(&entry.identifier).unwrap_or_default()
             ),
         });
     }
@@ -397,6 +409,24 @@ mod tests {
     }
 
     #[test]
+    fn rejects_hex_values_of_the_wrong_length() {
+        assert!(matches!(
+            ParsedDigest::parse("sha256:abc"),
+            Err(Error::InvalidDigestHex)
+        ));
+        assert!(matches!(
+            ParsedDigest::parse(
+                "sha512:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+            ),
+            Err(Error::InvalidDigestHex)
+        ));
+        assert!(matches!(
+            ParsedDigest::parse(&"z".repeat(64).prepend_with_algorithm("sha256")),
+            Err(Error::InvalidDigestHex)
+        ));
+    }
+
+    #[test]
     fn canonicalizes_manifest_without_signature() {
         let catalog = parse_catalog(
             r#"{
@@ -447,12 +477,12 @@ mod tests {
 			  },
 			  "entries": [
 				{
-				  "identifier": "urn:example:artifact",
+				  "identifier": "urn:air:acme.com:agent:artifact",
 				  "displayName": "Artifact",
 				  "type": "application/json",
 				  "url": "https://example.com/artifact.json",
 				  "trustManifest": {
-					"identity": "plain-identifier",
+					"identity": "did:web:evil.example",
 					"signature": "header.payload.signature",
 					"trustSchema": {
 					  "identifier": "",
@@ -462,7 +492,6 @@ mod tests {
 					  {
 						"type": "",
 						"uri": "",
-						"mediaType": "application/jwt",
 						"digest": "md5:abcd"
 					  }
 					],
@@ -497,12 +526,7 @@ mod tests {
         assert!(contains_finding(
             &report,
             Severity::Error,
-            "trustManifest.identity 'plain-identifier' MUST match entry identifier 'urn:example:artifact'"
-        ));
-        assert!(contains_finding(
-            &report,
-            Severity::Warning,
-            "trust manifest identity SHOULD be a URI-like identifier"
+            "trustManifest.identity domain 'evil.example' MUST align with entry identifier publisher domain 'acme.com'"
         ));
         assert!(contains_finding(
             &report,
@@ -514,6 +538,59 @@ mod tests {
             Severity::Error,
             "digest hex value contains non-hex characters"
         ));
+    }
+
+    #[test]
+    fn non_uri_identity_warns_without_binding_error() {
+        let report = analyze_catalog(&parse_catalog(
+            r#"{
+			  "specVersion": "1.0",
+			  "entries": [
+				{
+				  "identifier": "urn:example:artifact",
+				  "displayName": "Artifact",
+				  "type": "application/json",
+				  "url": "https://example.com/artifact.json",
+				  "trustManifest": {
+					"identity": "plain-identifier"
+				  }
+				}
+			  ]
+			}"#,
+        ));
+
+        assert!(contains_finding(
+            &report,
+            Severity::Warning,
+            "trust manifest identity SHOULD be a URI-like identifier"
+        ));
+        assert!(!contains_finding(
+            &report,
+            Severity::Error,
+            "MUST align with entry identifier publisher domain"
+        ));
+    }
+
+    #[test]
+    fn identity_binding_accepts_aligned_domains() {
+        let report = analyze_catalog(&parse_catalog(
+            r#"{
+			  "specVersion": "1.0",
+			  "entries": [
+				{
+				  "identifier": "urn:air:acme.com:agent:artifact",
+				  "displayName": "Artifact",
+				  "type": "application/json",
+				  "url": "https://acme.com/artifact.json",
+				  "trustManifest": {
+					"identity": "did:web:acme.com"
+				  }
+				}
+			  ]
+			}"#,
+        ));
+
+        assert!(report.findings.is_empty());
     }
 
     #[test]
@@ -546,7 +623,6 @@ mod tests {
 					  {
 						"type": "publisher-identity",
 						"uri": "https://example.com/publisher.jwt",
-						"mediaType": "application/jwt",
 						"digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
 					  }
 					],

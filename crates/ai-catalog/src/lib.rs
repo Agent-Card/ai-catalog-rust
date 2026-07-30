@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod error;
+mod identity;
 mod model;
 
 pub use error::{Error, Result};
+pub use identity::{identity_binds_to_entry, identity_domain, publisher_domain};
 pub use model::{
     AiCatalog, Attestation, CatalogEntry, HostInfo, ProvenanceLink, Publisher, TrustManifest,
     TrustSchema,

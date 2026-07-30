@@ -3,7 +3,9 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-use ai_catalog::{AiCatalog, CatalogEntry};
+use ai_catalog::{
+    AiCatalog, CatalogEntry, identity_binds_to_entry, identity_domain, publisher_domain,
+};
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
@@ -193,13 +195,14 @@ fn validate_entry(
             errors,
         );
 
-        if trust_manifest.identity != entry.identifier {
+        if identity_binds_to_entry(&entry.identifier, &trust_manifest.identity) == Some(false) {
             push_error(
                 errors,
                 format!("{path}.trustManifest.identity"),
                 format!(
-                    "trustManifest.identity '{}' does not match entry identifier '{}'",
-                    trust_manifest.identity, entry.identifier
+                    "trustManifest.identity domain '{}' does not align with the entry identifier publisher domain '{}'",
+                    identity_domain(&trust_manifest.identity).unwrap_or_default(),
+                    publisher_domain(&entry.identifier).unwrap_or_default()
                 ),
             );
         }
@@ -398,18 +401,18 @@ mod tests {
     }
 
     #[test]
-    fn rejects_mismatched_trust_identity() {
+    fn rejects_misaligned_trust_identity_domain() {
         let catalog = parse_str(
             r#"{
               "specVersion": "1.0",
               "entries": [
                 {
-                  "identifier": "urn:example:test",
+                  "identifier": "urn:air:acme.com:agent:test",
                   "displayName": "Test",
                   "type": "application/json",
-                  "url": "https://example.com/test.json",
+                  "url": "https://acme.com/test.json",
                   "trustManifest": {
-                    "identity": "urn:example:other"
+                    "identity": "did:web:evil.example"
                   }
                 }
               ]
@@ -423,8 +426,33 @@ mod tests {
         assert!(result.errors.iter().any(|diagnostic| {
             diagnostic
                 .message
-                .contains("does not match entry identifier")
+                .contains("does not align with the entry identifier publisher domain")
         }));
+    }
+
+    #[test]
+    fn accepts_trust_identity_aligned_by_domain() {
+        let catalog = parse_str(
+            r#"{
+              "specVersion": "1.0",
+              "entries": [
+                {
+                  "identifier": "urn:air:acme.com:agent:test",
+                  "displayName": "Test",
+                  "type": "application/json",
+                  "url": "https://acme.com/test.json",
+                  "trustManifest": {
+                    "identity": "did:web:acme.com"
+                  }
+                }
+              ]
+            }"#,
+        )
+        .expect("document should parse");
+
+        let result = validate(&catalog);
+
+        assert!(result.is_valid);
     }
 
     #[test]
