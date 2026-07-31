@@ -179,7 +179,6 @@ pub struct TrustSchema {
 pub struct Attestation {
     pub r#type: String,
     pub uri: String,
-    pub media_type: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub digest: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
