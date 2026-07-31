@@ -3,6 +3,10 @@
 
 [package]
 name = "ai-catalog"
+description = "Core types and JSON parsing for the AI Catalog specification"
+keywords = ["ai", "catalog", "agents", "metadata", "discovery"]
+categories = ["parser-implementations", "encoding"]
+readme = "README.md"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

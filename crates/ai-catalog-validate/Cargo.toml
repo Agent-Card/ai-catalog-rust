@@ -3,6 +3,10 @@
 
 [package]
 name = "ai-catalog-validate"
+description = "Semantic validation and conformance-level detection for AI Catalog documents"
+keywords = ["ai", "catalog", "validation", "conformance", "schema"]
+categories = ["development-tools", "parser-implementations"]
+readme = "README.md"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -10,6 +14,6 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-ai-catalog = { path = "../ai-catalog" }
+ai-catalog.workspace = true
 serde_json.workspace = true
 time.workspace = true
