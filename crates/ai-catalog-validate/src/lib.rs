@@ -196,15 +196,18 @@ fn validate_entry(
         );
 
         if identity_binds_to_entry(&entry.identifier, &trust_manifest.identity) == Some(false) {
-            push_error(
-                errors,
-                format!("{path}.trustManifest.identity"),
-                format!(
-                    "trustManifest.identity domain '{}' does not align with the entry identifier publisher domain '{}'",
-                    identity_domain(&trust_manifest.identity).unwrap_or_default(),
-                    publisher_domain(&entry.identifier).unwrap_or_default()
+            let publisher = publisher_domain(&entry.identifier).unwrap_or_default();
+            let message = match identity_domain(&trust_manifest.identity) {
+                Some(domain) => format!(
+                    "trustManifest.identity domain '{domain}' does not align with the entry identifier publisher domain '{publisher}'"
                 ),
-            );
+                None => format!(
+                    "trustManifest.identity '{}' has no trust domain to align with the entry identifier publisher domain '{publisher}'",
+                    trust_manifest.identity
+                ),
+            };
+
+            push_error(errors, format!("{path}.trustManifest.identity"), message);
         }
     }
 
@@ -427,6 +430,35 @@ mod tests {
             diagnostic
                 .message
                 .contains("does not align with the entry identifier publisher domain")
+        }));
+    }
+
+    #[test]
+    fn rejects_trust_identity_without_a_trust_domain() {
+        let catalog = parse_str(
+            r#"{
+              "specVersion": "1.0",
+              "entries": [
+                {
+                  "identifier": "urn:air:acme.com:agent:test",
+                  "displayName": "Test",
+                  "type": "application/json",
+                  "url": "https://acme.com/test.json",
+                  "trustManifest": {
+                    "identity": "urn:acme:agent:test"
+                  }
+                }
+              ]
+            }"#,
+        )
+        .expect("document should parse");
+
+        let result = validate(&catalog);
+
+        assert!(!result.is_valid);
+        assert!(result.errors.iter().any(|diagnostic| {
+            diagnostic.message
+                == "trustManifest.identity 'urn:acme:agent:test' has no trust domain to align with the entry identifier publisher domain 'acme.com'"
         }));
     }
 

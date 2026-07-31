@@ -34,13 +34,14 @@ pub fn identity_domain(identity: &str) -> Option<String> {
 }
 
 /// Reports whether a trust-manifest identity's domain aligns with an entry
-/// identifier's publisher domain. Returns `None` when either side carries no
-/// domain, in which case callers must not report a violation.
+/// identifier's publisher domain. Returns `None` only when the entry identifier
+/// carries no publisher domain, in which case the binding rule does not apply.
+/// An identity with no determinable domain cannot align, so it reports
+/// `Some(false)` rather than skipping the check.
 pub fn identity_binds_to_entry(identifier: &str, identity: &str) -> Option<bool> {
     let publisher = publisher_domain(identifier)?;
-    let domain = identity_domain(identity)?;
 
-    Some(publisher == domain)
+    Some(identity_domain(identity).as_deref() == Some(publisher.as_str()))
 }
 
 fn strip_prefix_ignore_case<'a>(value: &'a str, prefix: &str) -> Option<&'a str> {
@@ -135,8 +136,20 @@ mod tests {
             identity_binds_to_entry("urn:example:agent", "did:web:acme.com"),
             None
         );
+    }
+
+    #[test]
+    fn identity_without_domain_cannot_bind() {
         assert_eq!(
             identity_binds_to_entry("urn:air:acme.com:agent:finance", "plain-identifier"),
+            Some(false)
+        );
+        assert_eq!(
+            identity_binds_to_entry("urn:air:acme.com:agent:finance", "urn:acme:agent:finance"),
+            Some(false)
+        );
+        assert_eq!(
+            identity_binds_to_entry("urn:example:agent", "anything"),
             None
         );
     }

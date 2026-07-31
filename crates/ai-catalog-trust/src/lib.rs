@@ -201,14 +201,21 @@ fn analyze_entry_manifest(entry: &CatalogEntry, index: usize) -> Option<Manifest
     let mut findings = Vec::new();
 
     if identity_binds_to_entry(&entry.identifier, &manifest.identity) == Some(false) {
+        let publisher = publisher_domain(&entry.identifier).unwrap_or_default();
+        let message = match identity_domain(&manifest.identity) {
+            Some(domain) => format!(
+                "trustManifest.identity domain '{domain}' MUST align with entry identifier publisher domain '{publisher}'"
+            ),
+            None => format!(
+                "trustManifest.identity '{}' MUST carry a trust domain aligned with entry identifier publisher domain '{publisher}'",
+                manifest.identity
+            ),
+        };
+
         findings.push(Finding {
             severity: Severity::Error,
             path: format!("{path}.identity"),
-            message: format!(
-                "trustManifest.identity domain '{}' MUST align with entry identifier publisher domain '{}'",
-                identity_domain(&manifest.identity).unwrap_or_default(),
-                publisher_domain(&entry.identifier).unwrap_or_default()
-            ),
+            message,
         });
     }
 
@@ -568,6 +575,32 @@ mod tests {
             &report,
             Severity::Error,
             "MUST align with entry identifier publisher domain"
+        ));
+    }
+
+    #[test]
+    fn identity_without_trust_domain_fails_binding() {
+        let report = analyze_catalog(&parse_catalog(
+            r#"{
+			  "specVersion": "1.0",
+			  "entries": [
+				{
+				  "identifier": "urn:air:acme.com:agent:artifact",
+				  "displayName": "Artifact",
+				  "type": "application/json",
+				  "url": "https://acme.com/artifact.json",
+				  "trustManifest": {
+					"identity": "urn:acme:agent:artifact"
+				  }
+				}
+			  ]
+			}"#,
+        ));
+
+        assert!(contains_finding(
+            &report,
+            Severity::Error,
+            "MUST carry a trust domain aligned with entry identifier publisher domain 'acme.com'"
         ));
     }
 
