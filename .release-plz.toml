@@ -1,0 +1,30 @@
+# Copyright AGNTCY Contributors (https://github.com/agntcy)
+# SPDX-License-Identifier: Apache-2.0
+
+[workspace]
+release_always = false
+release = false
+
+[[package]]
+name = "ai-catalog"
+publish = true
+release = true
+changelog_update = true
+
+[[package]]
+name = "ai-catalog-validate"
+publish = true
+release = true
+changelog_update = true
+
+[[package]]
+name = "ai-catalog-trust"
+publish = true
+release = true
+changelog_update = true
+
+[[package]]
+name = "ai-catalog-oci"
+publish = true
+release = true
+changelog_update = true

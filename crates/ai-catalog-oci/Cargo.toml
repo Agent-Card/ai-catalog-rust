@@ -3,6 +3,10 @@
 
 [package]
 name = "ai-catalog-oci"
+description = "Pack and unpack AI Catalog documents as OCI artifacts and image layouts"
+keywords = ["ai", "catalog", "oci", "artifacts", "registry"]
+categories = ["development-tools", "encoding"]
+readme = "README.md"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -10,7 +14,7 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-ai-catalog = { path = "../ai-catalog" }
+ai-catalog.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true

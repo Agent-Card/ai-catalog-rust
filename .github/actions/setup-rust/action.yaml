@@ -1,0 +1,31 @@
+# Copyright AGNTCY Contributors (https://github.com/agntcy)
+# SPDX-License-Identifier: Apache-2.0
+
+---
+name: Setup Environment
+description: setup environment to build/test/lint rust applications
+inputs:
+  workspace:
+    description: 'Cargo workspace to cache'
+    required: false
+    default: '.'
+  cache-enabled:
+    description: 'Enable rust cache'
+    required: false
+    default: 'true'
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Rust
+      uses: actions-rust-lang/setup-rust-toolchain@150fca883cd4034361b621bd4e6a9d34e5143606 # v1.15.4
+      with:
+        components: rustc, clippy, rustfmt
+        rustflags: ''
+        cache: ${{ inputs.cache-enabled }}
+        cache-workspaces: ${{ inputs.workspace }}
+        cache-on-failure: false
+        # Keep this prefix free of the Cargo.lock hash so a lockfile change
+        # warm-starts from the previous cache instead of cold-starting.
+        cache-shared-key: ${{ runner.os }}-rust
+        cache-all-crates: true
+        cache-bin: false # enabling this clears the bin cache (swatinem cache bug)

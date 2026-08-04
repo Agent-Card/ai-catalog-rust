@@ -11,10 +11,10 @@ Rust toolkit for the [AI Catalog specification](https://agent-card.github.io/ai-
 
 | Crate | Description |
 |---|---|
-| `crates/ai-catalog` | Core types (`AiCatalog`, `CatalogEntry`, `HostInfo`, `Publisher`, `TrustManifest`), parse and serialize helpers |
-| `crates/ai-catalog-validate` | Semantic validation and conformance detection |
-| `crates/ai-catalog-trust` | Trust manifest analysis, digest verification, and canonicalization |
-| `crates/ai-catalog-oci` | OCI artifact-set pack/unpack and standard OCI image layout import/export |
+| [`crates/ai-catalog`](crates/ai-catalog/README.md) | Core types (`AiCatalog`, `CatalogEntry`, `HostInfo`, `Publisher`, `TrustManifest`), parse and serialize helpers |
+| [`crates/ai-catalog-validate`](crates/ai-catalog-validate/README.md) | Semantic validation and conformance detection |
+| [`crates/ai-catalog-trust`](crates/ai-catalog-trust/README.md) | Trust manifest analysis, digest verification, and canonicalization |
+| [`crates/ai-catalog-oci`](crates/ai-catalog-oci/README.md) | OCI artifact-set pack/unpack and standard OCI image layout import/export |
 | `crates/ai-catalog-cli` | `ai-catalog` command-line tool |
 
 ### Conformance levels
