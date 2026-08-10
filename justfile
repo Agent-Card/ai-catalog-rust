@@ -4,26 +4,6 @@
 default:
 	@just --list
 
-set windows-shell := ["powershell", "-NoLogo", "-NoProfile", "-Command"]
-
-demo_oci_layout_command := if os_family() == "windows" {
-	"powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File ./demo/oci-layout-walkthrough.ps1"
-} else {
-	"./demo/oci-layout-walkthrough.sh"
-}
-
-demo_consumer_command := if os_family() == "windows" {
-	"powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File ./demo/consumer-walkthrough.ps1"
-} else {
-	"./demo/consumer-walkthrough.sh"
-}
-
-demo_trust_command := if os_family() == "windows" {
-	"powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File ./demo/trust-walkthrough.ps1"
-} else {
-	"./demo/trust-walkthrough.sh"
-}
-
 build:
 	cargo build --workspace
 
@@ -33,15 +13,6 @@ lint:
 
 test:
 	cargo test --workspace
-
-demo-oci-layout:
-	{{demo_oci_layout_command}}
-
-demo-consumer:
-	{{demo_consumer_command}}
-
-demo-trust:
-	{{demo_trust_command}}
 
 coverage:
 	toolchain="$(awk -F'"' '/^channel = / {print $2}' rust-toolchain.toml)"; \

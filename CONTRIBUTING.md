@@ -20,17 +20,11 @@ just test
 cargo fmt --check
 ```
 
-If you touch OCI functionality, also run:
-
-```sh
-just demo-oci-layout
-```
-
 ## Change Expectations
 
 - Keep changes scoped to a single concern when possible.
 - Add or update tests for behavior changes.
-- Update `README.md`, ADRs, or demo material when the user-facing workflow changes.
+- Update `README.md` or ADRs when the user-facing workflow changes.
 - Preserve the repository license headers on source and script files.
 
 ## Review and Merge
