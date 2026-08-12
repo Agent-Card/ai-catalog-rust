@@ -1,6 +1,6 @@
 # ai-catalog
 
-Core types and JSON parsing for the [AI Catalog specification](https://agent-card.github.io/ai-catalog/).
+Core types and JSON parsing for the [AI Catalog specification](https://ai-catalog.io/).
 
 Provides `AiCatalog`, `CatalogEntry`, `HostInfo`, `Publisher`, `TrustManifest`, and the
 surrounding model types, along with helpers to parse and serialize catalog documents.

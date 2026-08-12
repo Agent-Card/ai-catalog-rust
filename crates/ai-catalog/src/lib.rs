@@ -8,8 +8,8 @@ mod model;
 pub use error::{Error, Result};
 pub use identity::{identity_binds_to_entry, identity_domain, publisher_domain};
 pub use model::{
-    AiCatalog, Attestation, CatalogEntry, HostInfo, ProvenanceLink, Publisher, TrustManifest,
-    TrustSchema,
+    AiCatalog, Attestation, CatalogEntry, HostInfo, ProvenanceLink, Publisher, Subject,
+    TrustManifest, TrustSchema,
 };
 
 use std::fs;
@@ -72,10 +72,7 @@ mod tests {
         assert_eq!(catalog.spec_version, "1.0");
         assert_eq!(catalog.entries.len(), 2);
         assert_eq!(
-            catalog
-                .host
-                .as_ref()
-                .and_then(|host| host.display_name.as_deref()),
+            catalog.host.as_ref().map(|host| host.display_name.as_str()),
             Some("Acme Services Inc."),
         );
 

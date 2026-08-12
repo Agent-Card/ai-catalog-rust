@@ -1,19 +1,22 @@
 # ai-catalog-validate
 
 Semantic validation and conformance-level detection for
-[AI Catalog](https://agent-card.github.io/ai-catalog/) documents.
+[AI Catalog](https://ai-catalog.io/) documents.
 
 Checks the rules a JSON schema cannot express — duplicate identifiers, timestamp formats,
-nesting depth, and trust-manifest identity binding — and reports the conformance level a
-document reaches.
+nesting depth, extension key namespacing, and trust-manifest identity and subject binding —
+and reports the conformance level a document reaches.
 
 ## Conformance levels
 
 | Level | Requirements |
 |---|---|
-| Minimal | `specVersion` plus at least one entry with `identifier` and `type` |
-| Discoverable | Minimal, plus `url` or `data` and `tags` on each entry |
-| Trusted | Discoverable, plus a `trustManifest` with `identity` on each entry |
+| Minimal | `specVersion`, and every entry carrying `identifier`, `type`, and exactly one of `url` or `data` |
+| Discoverable | Minimal, plus a `host` object identifying the catalog operator |
+| Trusted | Discoverable, plus every `trustManifest` in the document signed, with a `subject` and `issuedAt` |
+
+A single unsigned manifest downgrades the whole document below Trusted, because a consumer
+cannot rely on trust it has no way to verify.
 
 ## Usage
 

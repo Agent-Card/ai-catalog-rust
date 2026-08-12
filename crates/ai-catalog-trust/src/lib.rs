@@ -2,12 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use ai_catalog::{
-    AiCatalog, CatalogEntry, HostInfo, TrustManifest, identity_binds_to_entry, identity_domain,
-    publisher_domain,
+    AiCatalog, CatalogEntry, HostInfo, Subject, TrustManifest, identity_binds_to_entry,
+    identity_domain, publisher_domain,
 };
-use serde_json::{Map, Value};
+use base64::Engine as _;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD as BASE64_URL_SAFE_NO_PAD;
+use serde_json::Value;
 use sha2::{Digest as _, Sha256, Sha384, Sha512};
 use thiserror::Error;
+use time::OffsetDateTime;
+use time::format_description::well_known::Rfc3339;
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -53,6 +57,7 @@ pub struct CatalogTrustReport {
     pub findings: Vec<Finding>,
     pub host: Option<ManifestReport>,
     pub entries: Vec<ManifestReport>,
+    pub has_signature: bool,
 }
 
 const SHA256_HEX_LEN: usize = 64;
@@ -124,7 +129,17 @@ pub fn canonicalize_trust_manifest(manifest: &TrustManifest) -> Result<String> {
         object.remove("signature");
     }
 
-    serde_json::to_string(&sort_value(value)).map_err(Error::from)
+    serde_jcs::to_string(&value).map_err(Error::from)
+}
+
+pub fn canonicalize_catalog(catalog: &AiCatalog) -> Result<String> {
+    let mut value = serde_json::to_value(catalog)?;
+
+    if let Value::Object(object) = &mut value {
+        object.remove("signature");
+    }
+
+    serde_jcs::to_string(&value).map_err(Error::from)
 }
 
 pub fn verify_digest(expected_digest: &str, bytes: &[u8]) -> Result<bool> {
@@ -132,35 +147,85 @@ pub fn verify_digest(expected_digest: &str, bytes: &[u8]) -> Result<bool> {
 }
 
 pub fn analyze_catalog(catalog: &AiCatalog) -> CatalogTrustReport {
-    let host = catalog.host.as_ref().and_then(analyze_host_manifest);
-    let entries = catalog
-        .entries
-        .iter()
-        .enumerate()
-        .filter_map(|(index, entry)| analyze_entry_manifest(entry, index))
-        .collect::<Vec<_>>();
+    let mut host = None;
+    let mut entries = Vec::new();
 
-    let findings = host
-        .iter()
-        .flat_map(|report| report.findings.iter().cloned())
-        .chain(
-            entries
-                .iter()
-                .flat_map(|report| report.findings.iter().cloned()),
-        )
-        .collect();
+    analyze_catalog_at(catalog, "catalog", 1, &mut host, &mut entries);
+
+    let mut findings = Vec::new();
+
+    if let Some(signature) = &catalog.signature {
+        analyze_signature_algorithm("catalog.signature", signature, &mut findings);
+    }
+
+    findings.extend(
+        host.iter()
+            .flat_map(|report: &ManifestReport| report.findings.iter().cloned())
+            .chain(
+                entries
+                    .iter()
+                    .flat_map(|report: &ManifestReport| report.findings.iter().cloned()),
+            ),
+    );
 
     CatalogTrustReport {
         findings,
         host,
         entries,
+        has_signature: catalog.signature.is_some(),
     }
 }
 
-fn analyze_host_manifest(host: &HostInfo) -> Option<ManifestReport> {
+const MAX_NESTING_DEPTH: usize = 4;
+
+fn analyze_catalog_at(
+    catalog: &AiCatalog,
+    path: &str,
+    depth: usize,
+    root_host: &mut Option<ManifestReport>,
+    entries: &mut Vec<ManifestReport>,
+) {
+    if let Some(host) = &catalog.host
+        && let Some(report) = analyze_host_manifest(host, &format!("{path}.host.trustManifest"))
+    {
+        if depth == 1 {
+            *root_host = Some(report);
+        } else {
+            entries.push(report);
+        }
+    }
+
+    for (index, entry) in catalog.entries.iter().enumerate() {
+        let entry_path = format!("{path}.entries[{index}]");
+
+        if let Some(report) = analyze_entry_manifest(entry, &entry_path) {
+            entries.push(report);
+        }
+
+        if depth >= MAX_NESTING_DEPTH || !entry.is_nested_catalog() {
+            continue;
+        }
+
+        let Some(data) = &entry.data else {
+            continue;
+        };
+
+        if let Ok(nested) = serde_json::from_value::<AiCatalog>(data.clone()) {
+            analyze_catalog_at(
+                &nested,
+                &format!("{entry_path}.data"),
+                depth + 1,
+                root_host,
+                entries,
+            );
+        }
+    }
+}
+
+fn analyze_host_manifest(host: &HostInfo, path: &str) -> Option<ManifestReport> {
     let manifest = host.trust_manifest.as_ref()?;
     let mut findings = Vec::new();
-    let path = "catalog.host.trustManifest".to_owned();
+    let path = path.to_owned();
 
     if manifest.identity.find(':').is_none() {
         findings.push(Finding {
@@ -195,9 +260,9 @@ fn analyze_host_manifest(host: &HostInfo) -> Option<ManifestReport> {
     })
 }
 
-fn analyze_entry_manifest(entry: &CatalogEntry, index: usize) -> Option<ManifestReport> {
+fn analyze_entry_manifest(entry: &CatalogEntry, entry_path: &str) -> Option<ManifestReport> {
     let manifest = entry.trust_manifest.as_ref()?;
-    let path = format!("catalog.entries[{index}].trustManifest");
+    let path = format!("{entry_path}.trustManifest");
     let mut findings = Vec::new();
 
     if identity_binds_to_entry(&entry.identifier, &manifest.identity) == Some(false) {
@@ -240,15 +305,9 @@ fn analyze_entry_manifest(entry: &CatalogEntry, index: usize) -> Option<Manifest
 }
 
 fn analyze_manifest_contents(path: &str, manifest: &TrustManifest, findings: &mut Vec<Finding>) {
-    if let Some(signature) = &manifest.signature
-        && !looks_like_detached_jws(signature)
-    {
-        findings.push(Finding {
-            severity: Severity::Error,
-            path: format!("{path}.signature"),
-            message: "signature must use detached JWS compact serialization".to_owned(),
-        });
-    }
+    analyze_signature(path, manifest, findings);
+    analyze_subject(path, manifest.subject.as_ref(), findings);
+    analyze_validity_window(path, manifest, findings);
 
     if let Some(trust_schema) = &manifest.trust_schema {
         if trust_schema.identifier.is_empty() {
@@ -321,6 +380,154 @@ fn analyze_manifest_contents(path: &str, manifest: &TrustManifest, findings: &mu
     }
 }
 
+const ALLOWED_JWS_ALGORITHMS: [&str; 6] = ["ES256", "ES384", "EdDSA", "PS256", "PS384", "RS256"];
+
+fn analyze_signature(path: &str, manifest: &TrustManifest, findings: &mut Vec<Finding>) {
+    let Some(signature) = &manifest.signature else {
+        return;
+    };
+
+    if !looks_like_detached_jws(signature) {
+        findings.push(Finding {
+            severity: Severity::Error,
+            path: format!("{path}.signature"),
+            message: "signature must use detached JWS compact serialization".to_owned(),
+        });
+
+        return;
+    }
+
+    if manifest.subject.is_none() {
+        findings.push(Finding {
+            severity: Severity::Error,
+            path: format!("{path}.subject"),
+            message: "a signed trust manifest must carry a subject binding it to the artifact"
+                .to_owned(),
+        });
+    }
+
+    if manifest.issued_at.is_none() {
+        findings.push(Finding {
+            severity: Severity::Error,
+            path: format!("{path}.issuedAt"),
+            message: "a signed trust manifest must carry an issuedAt timestamp".to_owned(),
+        });
+    }
+
+    analyze_signature_algorithm(&format!("{path}.signature"), signature, findings);
+}
+
+fn analyze_signature_algorithm(path: &str, signature: &str, findings: &mut Vec<Finding>) {
+    let Some(algorithm) = jws_algorithm(signature) else {
+        findings.push(Finding {
+            severity: Severity::Error,
+            path: path.to_owned(),
+            message: "signature JWS header must be base64url-encoded JSON declaring an 'alg'"
+                .to_owned(),
+        });
+
+        return;
+    };
+
+    if is_forbidden_jws_algorithm(&algorithm) {
+        findings.push(Finding {
+            severity: Severity::Error,
+            path: path.to_owned(),
+            message: format!(
+                "signature algorithm '{algorithm}' must be rejected; a trust manifest requires an \
+                 asymmetric signature"
+            ),
+        });
+    } else if !ALLOWED_JWS_ALGORITHMS.contains(&algorithm.as_str()) {
+        findings.push(Finding {
+            severity: Severity::Warning,
+            path: path.to_owned(),
+            message: format!(
+                "signature algorithm '{algorithm}' is outside the specification allowlist ({})",
+                ALLOWED_JWS_ALGORITHMS.join(", ")
+            ),
+        });
+    }
+}
+
+fn is_forbidden_jws_algorithm(algorithm: &str) -> bool {
+    let normalized = algorithm.to_ascii_uppercase();
+
+    normalized == "NONE" || normalized.starts_with("HS")
+}
+
+fn jws_algorithm(signature: &str) -> Option<String> {
+    let encoded = signature.split('.').next()?;
+    let header = BASE64_URL_SAFE_NO_PAD.decode(encoded).ok()?;
+    let parsed: Value = serde_json::from_slice(&header).ok()?;
+
+    match parsed.get("alg")?.as_str()? {
+        "" => None,
+        algorithm => Some(algorithm.to_owned()),
+    }
+}
+
+fn analyze_subject(path: &str, subject: Option<&Subject>, findings: &mut Vec<Finding>) {
+    let Some(subject) = subject else {
+        return;
+    };
+
+    if subject.r#type.is_empty() {
+        findings.push(Finding {
+            severity: Severity::Error,
+            path: format!("{path}.subject.type"),
+            message: "subject type must not be empty".to_owned(),
+        });
+    }
+
+    if subject.digest.is_empty() {
+        findings.push(Finding {
+            severity: Severity::Error,
+            path: format!("{path}.subject.digest"),
+            message: "subject digest must not be empty".to_owned(),
+        });
+
+        return;
+    }
+
+    analyze_digest_field(&subject.digest, &format!("{path}.subject.digest"), findings);
+}
+
+fn analyze_validity_window(path: &str, manifest: &TrustManifest, findings: &mut Vec<Finding>) {
+    if let Some(issued_at) = &manifest.issued_at
+        && OffsetDateTime::parse(issued_at, &Rfc3339).is_err()
+    {
+        findings.push(invalid_timestamp(&format!("{path}.issuedAt"), issued_at));
+    }
+
+    let Some(expires_at) = &manifest.expires_at else {
+        return;
+    };
+
+    match OffsetDateTime::parse(expires_at, &Rfc3339) {
+        Ok(parsed) => {
+            if parsed < OffsetDateTime::now_utc() {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    path: format!("{path}.expiresAt"),
+                    message: format!(
+                        "trust manifest expired at {expires_at} and SHOULD be rejected"
+                    ),
+                });
+            }
+        }
+        Err(_) => findings.push(invalid_timestamp(&format!("{path}.expiresAt"), expires_at)),
+    }
+}
+
+fn invalid_timestamp(path: &str, value: &str) -> Finding {
+    Finding {
+        severity: Severity::Error,
+        path: path.to_owned(),
+        message: format!("'{value}' is not a valid RFC 3339 datetime"),
+    }
+}
+
 fn analyze_digest_field(value: &str, path: &str, findings: &mut Vec<Finding>) {
     if let Err(error) = ParsedDigest::parse(value) {
         findings.push(Finding {
@@ -342,24 +549,6 @@ fn looks_like_detached_jws(signature: &str) -> bool {
     }
 }
 
-fn sort_value(value: Value) -> Value {
-    match value {
-        Value::Array(values) => Value::Array(values.into_iter().map(sort_value).collect()),
-        Value::Object(object) => {
-            let mut sorted = object.into_iter().collect::<Vec<_>>();
-            sorted.sort_by(|left, right| left.0.cmp(&right.0));
-
-            let mut map = Map::new();
-            for (key, value) in sorted {
-                map.insert(key, sort_value(value));
-            }
-
-            Value::Object(map)
-        }
-        other => other,
-    }
-}
-
 fn digest_hex(bytes: &[u8]) -> String {
     let mut hex = String::with_capacity(bytes.len() * 2);
 
@@ -377,9 +566,335 @@ mod tests {
     use ai_catalog::parse_str;
 
     use super::{
-        CatalogTrustReport, Error, ParsedDigest, Severity, analyze_catalog,
+        CatalogTrustReport, Error, ParsedDigest, Severity, analyze_catalog, canonicalize_catalog,
         canonicalize_trust_manifest, verify_digest,
     };
+
+    #[test]
+    fn canonicalization_sorts_keys_by_utf16_code_unit() {
+        let manifest = parse_str(&format!(
+            r#"{{
+              "specVersion": "1.0",
+              "entries": [
+                {{
+                  "identifier": "urn:example:keys",
+                  "type": "application/json",
+                  "url": "https://example.com/a.json",
+                  "trustManifest": {{
+                    "identity": "urn:example:keys",
+                    "extensions": {{ "{bmp}": 1, "{non_bmp}": 2 }}
+                  }}
+                }}
+              ]
+            }}"#,
+            bmp = '\u{e000}',
+            non_bmp = '\u{10000}'
+        ))
+        .expect("document should parse");
+
+        let canonical = canonicalize_trust_manifest(
+            manifest.entries[0]
+                .trust_manifest
+                .as_ref()
+                .expect("manifest should exist"),
+        )
+        .expect("manifest should canonicalize");
+
+        let non_bmp = canonical.find('\u{10000}').expect("non-BMP key is present");
+        let bmp = canonical.find('\u{e000}').expect("BMP key is present");
+
+        assert!(
+            non_bmp < bmp,
+            "non-BMP key must sort first, got: {canonical}"
+        );
+    }
+
+    #[test]
+    fn canonicalization_uses_ecmascript_number_formatting() {
+        let manifest = parse_str(
+            r#"{
+              "specVersion": "1.0",
+              "entries": [
+                {
+                  "identifier": "urn:example:numbers",
+                  "type": "application/json",
+                  "url": "https://example.com/a.json",
+                  "trustManifest": {
+                    "identity": "urn:example:numbers",
+                    "extensions": { "com.example.big": 1e21 }
+                  }
+                }
+              ]
+            }"#,
+        )
+        .expect("document should parse");
+
+        let canonical = canonicalize_trust_manifest(
+            manifest.entries[0]
+                .trust_manifest
+                .as_ref()
+                .expect("manifest should exist"),
+        )
+        .expect("manifest should canonicalize");
+
+        assert!(
+            canonical.contains("1e+21"),
+            "expected ECMAScript number form, got: {canonical}"
+        );
+    }
+
+    #[test]
+    fn rejects_signatures_that_cannot_establish_third_party_trust() {
+        for (algorithm, signature) in [
+            ("none", "eyJhbGciOiJub25lIn0..c2ln"),
+            ("HS256", "eyJhbGciOiJIUzI1NiJ9..c2ln"),
+        ] {
+            let report = analyze(&format!(
+                r#"{{
+                  "specVersion": "1.0",
+                  "entries": [
+                    {{
+                      "identifier": "urn:example:weak",
+                      "type": "application/json",
+                      "url": "https://example.com/a.json",
+                      "trustManifest": {{
+                        "identity": "urn:example:weak",
+                        "issuedAt": "2026-01-01T00:00:00Z",
+                        "signature": "{signature}",
+                        "subject": {{
+                          "type": "application/json",
+                          "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+                        }}
+                      }}
+                    }}
+                  ]
+                }}"#
+            ));
+
+            assert!(
+                report.findings.iter().any(|finding| {
+                    finding.severity == Severity::Error
+                        && finding.message.contains("must be rejected")
+                }),
+                "expected {algorithm} to be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn analyzes_manifests_inside_nested_catalogs() {
+        let manifest = r#"{
+            "identity": "did:web:acme.com",
+            "signature": "eyJhbGciOiJub25lIn0..c2ln",
+            "issuedAt": "2026-01-01T00:00:00Z",
+            "subject": {"type": "application/parquet", "digest": "md5:abc", "url": "https://acme.com/d.parquet"}
+        }"#;
+        let report = analyze(&format!(
+            r#"{{"specVersion":"1.0","entries":[
+                {{"identifier":"urn:air:acme.com:catalog:c","type":"application/ai-catalog+json","data":{{
+                    "specVersion":"1.0","entries":[
+                        {{"identifier":"urn:air:acme.com:data:d","type":"application/parquet","url":"https://acme.com/d.parquet","trustManifest":{manifest}}}
+                    ]}}}}
+            ]}}"#
+        ));
+
+        assert!(
+            report.findings.iter().any(|finding| {
+                finding.severity == Severity::Error && finding.message.contains("'none'")
+            }),
+            "nested forbidden algorithm went unreported: {:?}",
+            report.findings
+        );
+        assert!(
+            report.findings.iter().any(|finding| {
+                finding.severity == Severity::Error
+                    && finding.message.contains("weaker than SHA-256")
+            }),
+            "nested weak digest went unreported: {:?}",
+            report.findings
+        );
+        assert!(
+            report
+                .entries
+                .iter()
+                .any(|entry| entry.path == "catalog.entries[0].data.entries[0].trustManifest"),
+            "nested manifest missing from the report: {:?}",
+            report.entries.iter().map(|e| &e.path).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn stops_descending_at_the_recommended_depth_limit() {
+        let mut document = r#"{"specVersion":"1.0","entries":[{"identifier":"urn:air:acme.com:data:d","type":"application/parquet","url":"https://acme.com/d.parquet","trustManifest":{"identity":"did:web:acme.com","signature":"eyJhbGciOiJub25lIn0..c2ln","issuedAt":"2026-01-01T00:00:00Z","subject":{"type":"application/parquet","digest":"sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08","url":"https://acme.com/d.parquet"}}}]}"#.to_owned();
+
+        for _ in 0..5 {
+            document = format!(
+                r#"{{"specVersion":"1.0","entries":[{{"identifier":"urn:air:acme.com:catalog:c","type":"application/ai-catalog+json","data":{document}}}]}}"#
+            );
+        }
+
+        let report = analyze(&document);
+
+        assert!(
+            report.findings.is_empty(),
+            "recursion passed the depth limit: {:?}",
+            report.findings
+        );
+    }
+
+    #[test]
+    fn analyzes_the_catalog_level_signature() {
+        let report = analyze(
+            r#"{
+              "specVersion": "1.0",
+              "entries": [],
+              "signature": "eyJhbGciOiJIUzI1NiJ9..c2ln"
+            }"#,
+        );
+
+        assert!(report.has_signature);
+        assert!(
+            report.findings.iter().any(|finding| {
+                finding.severity == Severity::Error && finding.path == "catalog.signature"
+            }),
+            "catalog signature not analyzed: {:?}",
+            report.findings
+        );
+    }
+
+    #[test]
+    fn canonicalizes_catalog_without_signature() {
+        let catalog = parse_str(
+            r#"{"specVersion":"1.0","entries":[],"signature":"eyJhbGciOiJFUzI1NiJ9..c2ln"}"#,
+        )
+        .expect("document should parse");
+
+        let canonical = canonicalize_catalog(&catalog).expect("canonicalizes");
+
+        assert!(!canonical.contains("signature"));
+        assert_eq!(canonical, r#"{"entries":[],"specVersion":"1.0"}"#);
+    }
+
+    #[test]
+    fn reports_malformed_and_expired_manifest_timestamps() {
+        let report = analyze(
+            r#"{
+              "specVersion": "1.0",
+              "entries": [
+                {
+                  "identifier": "urn:example:bad-issued",
+                  "type": "application/json",
+                  "url": "https://example.com/a.json",
+                  "trustManifest": {
+                    "identity": "urn:example:bad-issued",
+                    "issuedAt": "not-a-date",
+                    "expiresAt": "2020-01-01T00:00:00Z"
+                  }
+                }
+              ]
+            }"#,
+        );
+
+        assert!(report.findings.iter().any(|finding| {
+            finding.severity == Severity::Error
+                && finding.message.contains("not a valid RFC 3339 datetime")
+        }));
+        assert!(report.findings.iter().any(|finding| {
+            finding.severity == Severity::Warning && finding.message.contains("expired at")
+        }));
+    }
+
+    #[test]
+    fn compares_timestamps_as_instants_not_strings() {
+        let report = analyze(
+            r#"{
+              "specVersion": "1.0",
+              "entries": [
+                {
+                  "identifier": "urn:example:offset",
+                  "type": "application/json",
+                  "url": "https://example.com/a.json",
+                  "trustManifest": {
+                    "identity": "urn:example:offset",
+                    "issuedAt": "2030-01-01T12:00:00Z",
+                    "expiresAt": "2030-01-01T02:00:00-11:00"
+                  }
+                }
+              ]
+            }"#,
+        );
+
+        assert!(
+            report.findings.is_empty(),
+            "unexpected findings: {:?}",
+            report.findings
+        );
+    }
+
+    #[test]
+    fn warns_on_algorithms_outside_the_allowlist() {
+        let report = analyze(
+            r#"{
+              "specVersion": "1.0",
+              "entries": [
+                {
+                  "identifier": "urn:example:odd",
+                  "type": "application/json",
+                  "url": "https://example.com/a.json",
+                  "trustManifest": {
+                    "identity": "urn:example:odd",
+                    "issuedAt": "2026-01-01T00:00:00Z",
+                    "signature": "eyJhbGciOiJSUzUxMiJ9..c2ln",
+                    "subject": {
+                      "type": "application/json",
+                      "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+                    }
+                  }
+                }
+              ]
+            }"#,
+        );
+
+        assert!(report.findings.iter().any(|finding| {
+            finding.severity == Severity::Warning
+                && finding
+                    .message
+                    .contains("outside the specification allowlist")
+        }));
+    }
+
+    #[test]
+    fn flags_a_signed_manifest_missing_its_subject_and_issued_at() {
+        let report = analyze(
+            r#"{
+              "specVersion": "1.0",
+              "entries": [
+                {
+                  "identifier": "urn:example:bare",
+                  "type": "application/json",
+                  "url": "https://example.com/a.json",
+                  "trustManifest": {
+                    "identity": "urn:example:bare",
+                    "signature": "eyJhbGciOiJFUzI1NiJ9..c2ln"
+                  }
+                }
+              ]
+            }"#,
+        );
+
+        assert!(
+            report
+                .findings
+                .iter()
+                .any(|finding| { finding.message.contains("must carry a subject") })
+        );
+        assert!(
+            report
+                .findings
+                .iter()
+                .any(|finding| { finding.message.contains("must carry an issuedAt") })
+        );
+    }
 
     #[test]
     fn parses_and_verifies_supported_digests() {
@@ -446,10 +961,10 @@ mod tests {
 				  "url": "https://example.com/agent.json",
 				  "trustManifest": {
 					"identity": "urn:example:agent",
-					"signature": "header..signature",
-					"metadata": {
-					  "zeta": true,
-					  "alpha": 1
+					"signature": "eyJhbGciOiJFUzI1NiJ9..c2ln",
+					"extensions": {
+					  "com.example.zeta": true,
+					  "com.example.alpha": 1
 					}
 				  }
 				}
@@ -465,7 +980,7 @@ mod tests {
             canonicalize_trust_manifest(manifest).expect("canonicalization should work");
 
         assert!(!canonical.contains("signature"));
-        assert!(canonical.contains("\"alpha\":1"));
+        assert!(canonical.contains("\"com.example.alpha\":1"));
         assert!(canonical.find("alpha").expect("alpha") < canonical.find("zeta").expect("zeta"));
     }
 
@@ -636,7 +1151,12 @@ mod tests {
 				"identifier": "did:web:example.com",
 				"trustManifest": {
 				  "identity": "did:web:example.com",
-				  "signature": "header..signature"
+				  "issuedAt": "2026-01-01T00:00:00Z",
+				  "signature": "eyJhbGciOiJFUzI1NiJ9..c2ln",
+				  "subject": {
+					"type": "application/ai-catalog+json",
+					"digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+				  }
 				}
 			  },
 			  "entries": [
@@ -647,7 +1167,13 @@ mod tests {
 				  "url": "https://example.com/artifact.json",
 				  "trustManifest": {
 					"identity": "urn:example:artifact",
-					"signature": "header..signature",
+					"issuedAt": "2026-01-01T00:00:00Z",
+					"signature": "eyJhbGciOiJFUzI1NiJ9..c2ln",
+					"subject": {
+					  "type": "application/json",
+					  "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+					  "url": "https://example.com/artifact.json"
+					},
 					"trustSchema": {
 					  "identifier": "urn:trust:example",
 					  "version": "1.0"
@@ -682,6 +1208,10 @@ mod tests {
 
     fn parse_catalog(document: &str) -> ai_catalog::AiCatalog {
         parse_str(document).expect("catalog should parse")
+    }
+
+    fn analyze(document: &str) -> CatalogTrustReport {
+        analyze_catalog(&parse_catalog(document))
     }
 
     fn contains_finding(report: &CatalogTrustReport, severity: Severity, message: &str) -> bool {

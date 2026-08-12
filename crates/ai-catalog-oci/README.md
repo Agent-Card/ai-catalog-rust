@@ -1,6 +1,6 @@
 # ai-catalog-oci
 
-Pack and unpack [AI Catalog](https://agent-card.github.io/ai-catalog/) documents as OCI
+Pack and unpack [AI Catalog](https://ai-catalog.io/) documents as OCI
 artifacts and standard OCI image layouts.
 
 Turns a catalog and its referenced entries into a content-addressed artifact set that can

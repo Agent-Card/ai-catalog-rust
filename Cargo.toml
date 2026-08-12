@@ -22,8 +22,10 @@ ai-catalog = { path = "crates/ai-catalog", version = "0.1.0" }
 ai-catalog-oci = { path = "crates/ai-catalog-oci", version = "0.1.0" }
 ai-catalog-trust = { path = "crates/ai-catalog-trust", version = "0.1.0" }
 ai-catalog-validate = { path = "crates/ai-catalog-validate", version = "0.1.0" }
+base64 = "0.22"
 regex = "1"
 serde = { version = "1.0", features = ["derive"] }
+serde_jcs = "0.2"
 serde_json = "1.0"
 sha2 = "0.10"
 thiserror = "2.0"
