@@ -1,10 +1,10 @@
 # ai-catalog-rust
 
-Rust libraries for the [AI Catalog specification](https://agent-card.github.io/ai-catalog/).
+Rust libraries for the [AI Catalog specification](https://ai-catalog.io/).
 
 | Resource | Link |
 |---|---|
-| Specification | <https://agent-card.github.io/ai-catalog/> |
+| Specification | <https://ai-catalog.io/> |
 | Upstream repository | <https://github.com/Agent-Card/ai-catalog> |
 | Command-line tool | <https://github.com/agntcy/ai-catalog-cli> |
 
@@ -29,17 +29,17 @@ these crates from crates.io.
 
 | Level | Requirements |
 |---|---|
-| **Minimal** | `specVersion` + at least one entry with `identifier` and `type` |
-| **Discoverable** | Minimal + `url` or `data` on each entry + `tags` |
-| **Trusted** | Discoverable + `trustManifest` with `identity` on each entry |
+| **Minimal** | `specVersion`, and every entry carrying `identifier`, `type`, and exactly one of `url` or `data` |
+| **Discoverable** | Minimal + a `host` object identifying the catalog operator |
+| **Trusted** | Discoverable + every `trustManifest` in the document signed, with a `subject` and `issuedAt` |
 
 ## Usage
 
 ```toml
 [dependencies]
-ai-catalog = "0.1"
-ai-catalog-validate = "0.1"
-ai-catalog-trust = "0.1"
+ai-catalog = "0.2"
+ai-catalog-validate = "0.2"
+ai-catalog-trust = "0.2"
 ```
 
 Parse a catalog and look up entries. Unrecognized fields survive a round-trip:

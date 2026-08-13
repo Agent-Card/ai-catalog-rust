@@ -139,7 +139,7 @@ struct EntryConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     updated_at: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    metadata: Option<BTreeMap<String, Value>>,
+    extensions: Option<BTreeMap<String, Value>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     publisher: Option<Publisher>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -267,10 +267,15 @@ pub fn unpack_catalog(artifacts: &OciArtifactSet) -> Result<AiCatalog> {
         .cloned()
         .ok_or(Error::MissingSpecVersion)?;
     let host = annotations_json::<HostInfo>(&artifacts.index.annotations, "ai-catalog.host")?;
-    let metadata = annotations_json::<BTreeMap<String, Value>>(
+    let extensions = annotations_json::<BTreeMap<String, Value>>(
         &artifacts.index.annotations,
-        "ai-catalog.metadata",
+        "ai-catalog.extensions",
     )?;
+    let signature = artifacts
+        .index
+        .annotations
+        .get("ai-catalog.signature")
+        .cloned();
     let extra_fields = annotations_json::<BTreeMap<String, Value>>(
         &artifacts.index.annotations,
         "ai-catalog.extraFields",
@@ -336,7 +341,7 @@ pub fn unpack_catalog(artifacts: &OciArtifactSet) -> Result<AiCatalog> {
             publisher: config.publisher,
             trust_manifest,
             updated_at: config.updated_at,
-            metadata: config.metadata,
+            extensions: config.extensions,
             extra_fields: config.extra_fields,
         });
     }
@@ -345,7 +350,8 @@ pub fn unpack_catalog(artifacts: &OciArtifactSet) -> Result<AiCatalog> {
         spec_version,
         host,
         entries,
-        metadata,
+        signature,
+        extensions,
         extra_fields,
     })
 }
@@ -596,11 +602,15 @@ fn catalog_annotations(catalog: &AiCatalog) -> Result<BTreeMap<String, String>> 
         annotations.insert("ai-catalog.host".to_owned(), serde_json::to_string(host)?);
     }
 
-    if let Some(metadata) = &catalog.metadata {
+    if let Some(extensions) = &catalog.extensions {
         annotations.insert(
-            "ai-catalog.metadata".to_owned(),
-            serde_json::to_string(metadata)?,
+            "ai-catalog.extensions".to_owned(),
+            serde_json::to_string(extensions)?,
         );
+    }
+
+    if let Some(signature) = &catalog.signature {
+        annotations.insert("ai-catalog.signature".to_owned(), signature.clone());
     }
 
     if !catalog.extra_fields.is_empty() {
@@ -833,7 +843,7 @@ impl From<&CatalogEntry> for EntryConfig {
             tags: entry.tags.clone(),
             version: entry.version.clone(),
             updated_at: entry.updated_at.clone(),
-            metadata: entry.metadata.clone(),
+            extensions: entry.extensions.clone(),
             publisher: entry.publisher.clone(),
             url: entry.url.clone(),
             extra_fields: entry.extra_fields.clone(),
@@ -882,8 +892,8 @@ mod tests {
         let catalog = parse_str(
             r#"{
 			  "specVersion": "1.0",
-			  "metadata": {
-				"scope": "test"
+			  "extensions": {
+				"com.example.scope": "test"
 			  },
 			  "entries": [
 				{
@@ -948,8 +958,8 @@ mod tests {
                 "host": {
                     "displayName": "Example Host"
                 },
-                "metadata": {
-                    "scope": "demo"
+                "extensions": {
+                    "com.example.scope": "demo"
                 },
                 "entries": [
                     {
@@ -972,7 +982,7 @@ mod tests {
             artifacts
                 .index
                 .annotations
-                .contains_key("ai-catalog.metadata")
+                .contains_key("ai-catalog.extensions")
         );
     }
 

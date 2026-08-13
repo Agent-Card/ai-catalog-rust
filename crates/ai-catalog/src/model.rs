@@ -10,13 +10,16 @@ use serde_json::Value;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AiCatalog {
+    #[serde(default)]
     pub spec_version: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub host: Option<HostInfo>,
     #[serde(default)]
     pub entries: Vec<CatalogEntry>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub metadata: Option<BTreeMap<String, Value>>,
+    pub signature: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub extensions: Option<BTreeMap<String, Value>>,
     #[serde(flatten, default)]
     pub extra_fields: BTreeMap<String, Value>,
 }
@@ -76,8 +79,8 @@ impl AiCatalog {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HostInfo {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub display_name: Option<String>,
+    #[serde(default)]
+    pub display_name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub identifier: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -93,10 +96,11 @@ pub struct HostInfo {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CatalogEntry {
+    #[serde(default)]
     pub identifier: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,
-    #[serde(rename = "type")]
+    #[serde(rename = "type", default)]
     pub entry_type: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,
@@ -115,7 +119,7 @@ pub struct CatalogEntry {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub updated_at: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub metadata: Option<BTreeMap<String, Value>>,
+    pub extensions: Option<BTreeMap<String, Value>>,
     #[serde(flatten, default)]
     pub extra_fields: BTreeMap<String, Value>,
 }
@@ -129,7 +133,9 @@ impl CatalogEntry {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Publisher {
+    #[serde(default)]
     pub identifier: String,
+    #[serde(default)]
     pub display_name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub identity_type: Option<String>,
@@ -140,6 +146,7 @@ pub struct Publisher {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TrustManifest {
+    #[serde(default)]
     pub identity: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub identity_type: Option<String>,
@@ -154,9 +161,28 @@ pub struct TrustManifest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub terms_of_service_url: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subject: Option<Subject>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub issued_at: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub signature: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub metadata: Option<BTreeMap<String, Value>>,
+    pub extensions: Option<BTreeMap<String, Value>>,
+    #[serde(flatten, default)]
+    pub extra_fields: BTreeMap<String, Value>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Subject {
+    #[serde(default)]
+    pub r#type: String,
+    #[serde(default)]
+    pub digest: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
     #[serde(flatten, default)]
     pub extra_fields: BTreeMap<String, Value>,
 }
@@ -164,7 +190,9 @@ pub struct TrustManifest {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TrustSchema {
+    #[serde(default)]
     pub identifier: String,
+    #[serde(default)]
     pub version: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub governance_uri: Option<String>,
@@ -177,7 +205,9 @@ pub struct TrustSchema {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Attestation {
+    #[serde(default)]
     pub r#type: String,
+    #[serde(default)]
     pub uri: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub digest: Option<String>,
@@ -192,7 +222,9 @@ pub struct Attestation {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProvenanceLink {
+    #[serde(default)]
     pub relation: String,
+    #[serde(default)]
     pub source_id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_digest: Option<String>,
