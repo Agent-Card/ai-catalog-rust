@@ -15,13 +15,13 @@ edition = "2024"
 license = "Apache-2.0"
 repository = "https://github.com/agntcy/ai-catalog-rust"
 rust-version = "1.95"
-version = "0.1.0"
+version = "0.2.0"
 
 [workspace.dependencies]
-ai-catalog = { path = "crates/ai-catalog", version = "0.1.0" }
-ai-catalog-oci = { path = "crates/ai-catalog-oci", version = "0.1.0" }
-ai-catalog-trust = { path = "crates/ai-catalog-trust", version = "0.1.0" }
-ai-catalog-validate = { path = "crates/ai-catalog-validate", version = "0.1.0" }
+ai-catalog = { path = "crates/ai-catalog", version = "0.2.0" }
+ai-catalog-oci = { path = "crates/ai-catalog-oci", version = "0.2.0" }
+ai-catalog-trust = { path = "crates/ai-catalog-trust", version = "0.2.0" }
+ai-catalog-validate = { path = "crates/ai-catalog-validate", version = "0.2.0" }
 base64 = "0.22"
 regex = "1"
 serde = { version = "1.0", features = ["derive"] }

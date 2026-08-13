@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0](https://github.com/agntcy/ai-catalog-rust/compare/ai-catalog-validate-v0.1.0...ai-catalog-validate-v0.2.0) - 2026-08-13
+
+### Added
+
+- align model, validation, and trust analysis with the AI Catalog specification ([#14](https://github.com/agntcy/ai-catalog-rust/pull/14))
+
 ## [0.1.0](https://github.com/agntcy/ai-catalog-rust/releases/tag/ai-catalog-validate-v0.1.0) - 2026-08-04
 
 ### Added
