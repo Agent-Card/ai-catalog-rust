@@ -6,7 +6,7 @@ Rust libraries for the [AI Catalog specification](https://ai-catalog.io/).
 |---|---|
 | Specification | <https://ai-catalog.io/> |
 | Upstream repository | <https://github.com/Agent-Card/ai-catalog> |
-| Command-line tool | <https://github.com/agntcy/ai-catalog-cli> |
+| Command-line tool | <https://github.com/Agent-Card/ai-catalog-cli> |
 
 ## Workspace
 
@@ -22,7 +22,7 @@ specification. `ai-catalog-oci` is a convenience for distributing catalogs over
 existing registry infrastructure; OCI packaging is not part of the spec.
 
 The `ai-catalog` command-line tool lives in
-[`agntcy/ai-catalog-cli`](https://github.com/agntcy/ai-catalog-cli) and consumes
+[`Agent-Card/ai-catalog-cli`](https://github.com/Agent-Card/ai-catalog-cli) and consumes
 these crates from crates.io.
 
 ### Conformance levels

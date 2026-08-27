@@ -1,6 +1,6 @@
 # Governance
 
-This repository is maintained by AGNTCY Contributors.
+This repository is maintained by AI-Catalog Contributors.
 
 ## Decision Making
 
