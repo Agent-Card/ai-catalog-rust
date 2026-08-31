@@ -1,4 +1,5 @@
-// Copyright AI-Catalog Contributors (https://github.com/Agent-Card)
+// Copyright AI-Catalog Contributors (https://github.com/Agent-Card/ai-catalog-rust)
+// Copyright AGNTCY Contributors (https://github.com/agntcy)
 // SPDX-License-Identifier: Apache-2.0
 
 mod error;
