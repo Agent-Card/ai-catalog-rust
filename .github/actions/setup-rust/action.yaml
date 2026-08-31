@@ -1,3 +1,4 @@
+# Copyright AI-Catalog Contributors (https://github.com/Agent-Card/ai-catalog-rust)
 # Copyright AGNTCY Contributors (https://github.com/agntcy)
 # SPDX-License-Identifier: Apache-2.0
 
@@ -6,21 +7,21 @@ name: Setup Environment
 description: setup environment to build/test/lint rust applications
 inputs:
   workspace:
-    description: 'Cargo workspace to cache'
+    description: "Cargo workspace to cache"
     required: false
-    default: '.'
+    default: "."
   cache-enabled:
-    description: 'Enable rust cache'
+    description: "Enable rust cache"
     required: false
-    default: 'true'
+    default: "true"
 runs:
-  using: 'composite'
+  using: "composite"
   steps:
     - name: Setup Rust
-      uses: actions-rust-lang/setup-rust-toolchain@150fca883cd4034361b621bd4e6a9d34e5143606 # v1.15.4
+      uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1.17.0
       with:
         components: rustc, clippy, rustfmt
-        rustflags: ''
+        rustflags: ""
         cache: ${{ inputs.cache-enabled }}
         cache-workspaces: ${{ inputs.workspace }}
         cache-on-failure: false

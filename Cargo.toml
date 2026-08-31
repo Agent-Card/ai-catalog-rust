@@ -1,3 +1,4 @@
+# Copyright AI-Catalog Contributors (https://github.com/Agent-Card/ai-catalog-rust)
 # Copyright AGNTCY Contributors (https://github.com/agntcy)
 # SPDX-License-Identifier: Apache-2.0
 
@@ -13,7 +14,7 @@ resolver = "2"
 [workspace.package]
 edition = "2024"
 license = "Apache-2.0"
-repository = "https://github.com/agntcy/ai-catalog-rust"
+repository = "https://github.com/Agent-Card/ai-catalog-rust"
 rust-version = "1.95"
 version = "0.2.0"
 
