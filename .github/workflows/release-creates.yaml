@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 ---
-name: ci-release-rust
+name: ci-release-creates
 
 on:
   push:
@@ -28,6 +28,8 @@ jobs:
         uses: ./.github/actions/setup-rust
       - name: Run release-plz
         uses: release-plz/action@2eb1d8bcb770b4c48ccfaad919734b38b51958c9 # v0.5.131
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           command: release
           manifest_path: ./Cargo.toml
@@ -53,6 +55,8 @@ jobs:
         uses: ./.github/actions/setup-rust
       - name: Run release-plz - PR
         uses: release-plz/action@2eb1d8bcb770b4c48ccfaad919734b38b51958c9 # v0.5.131
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           command: release-pr
           manifest_path: ./Cargo.toml
