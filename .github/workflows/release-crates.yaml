@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 ---
-name: ci-release-crates
+name: release-crates
 
 on:
   push:
@@ -16,7 +16,7 @@ jobs:
     environment: release
     permissions:
       contents: write
-      pull-requests: write
+      pull-requests: read
       id-token: write
     steps:
       - name: Checkout repository
