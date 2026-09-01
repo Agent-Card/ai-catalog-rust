@@ -5,6 +5,7 @@
 [workspace]
 release_always = false
 release = false
+git_release_draft = true
 
 [[package]]
 name = "ai-catalog"
