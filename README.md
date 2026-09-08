@@ -1,5 +1,7 @@
 # ai-catalog-rust
 
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/Agent-Card/ai-catalog-rust/badge)](https://securityscorecards.dev/viewer/?uri=github.com/Agent-Card/ai-catalog-rust)
+
 Rust libraries for the [AI Catalog specification](https://ai-catalog.io/).
 
 | Resource | Link |
