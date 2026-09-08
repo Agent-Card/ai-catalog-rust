@@ -127,7 +127,7 @@ pub struct CatalogEntry {
 
 impl CatalogEntry {
     pub fn is_nested_catalog(&self) -> bool {
-        self.entry_type == "application/ai-catalog+json"
+        self.entry_type == crate::MEDIA_TYPE_CATALOG
     }
 }
 

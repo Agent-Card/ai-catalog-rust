@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
 
-use ai_catalog::{AiCatalog, CatalogEntry, HostInfo, Publisher, TrustManifest};
+use ai_catalog::{AiCatalog, CatalogEntry, HostInfo, MEDIA_TYPE_CATALOG, Publisher, TrustManifest};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest as _, Sha256};
@@ -14,7 +14,6 @@ use thiserror::Error;
 
 pub const OCI_IMAGE_INDEX_MEDIA_TYPE: &str = "application/vnd.oci.image.index.v1+json";
 pub const OCI_IMAGE_MANIFEST_MEDIA_TYPE: &str = "application/vnd.oci.image.manifest.v1+json";
-pub const AI_CATALOG_MEDIA_TYPE: &str = "application/ai-catalog+json";
 pub const ENTRY_CONFIG_MEDIA_TYPE: &str = "application/vnd.ai-catalog.entry.config.v1+json";
 pub const OCI_LAYOUT_VERSION: &str = "1.0.0";
 pub const OCI_REF_NAME_ANNOTATION: &str = "org.opencontainers.image.ref.name";
@@ -43,7 +42,7 @@ pub enum Error {
     MissingManifest(String),
     #[error("missing blob for digest '{0}'")]
     MissingBlob(String),
-    #[error("OCI index artifactType must be '{AI_CATALOG_MEDIA_TYPE}'")]
+    #[error("OCI index artifactType must be '{MEDIA_TYPE_CATALOG}'")]
     UnsupportedIndexArtifactType,
     #[error("OCI index is missing ai-catalog.specVersion annotation")]
     MissingSpecVersion,
@@ -246,7 +245,7 @@ pub fn pack_catalog(catalog: &AiCatalog) -> Result<OciArtifactSet> {
         index: OciImageIndex {
             schema_version: 2,
             media_type: OCI_IMAGE_INDEX_MEDIA_TYPE.to_owned(),
-            artifact_type: Some(AI_CATALOG_MEDIA_TYPE.to_owned()),
+            artifact_type: Some(MEDIA_TYPE_CATALOG.to_owned()),
             manifests: index_descriptors,
             annotations: catalog_annotations(catalog)?,
         },
@@ -257,7 +256,7 @@ pub fn pack_catalog(catalog: &AiCatalog) -> Result<OciArtifactSet> {
 }
 
 pub fn unpack_catalog(artifacts: &OciArtifactSet) -> Result<AiCatalog> {
-    if artifacts.index.artifact_type.as_deref() != Some(AI_CATALOG_MEDIA_TYPE) {
+    if artifacts.index.artifact_type.as_deref() != Some(MEDIA_TYPE_CATALOG) {
         return Err(Error::UnsupportedIndexArtifactType);
     }
 
@@ -633,7 +632,7 @@ fn select_layout_root_descriptor<'a>(
         .iter()
         .filter(|descriptor| {
             descriptor.media_type == OCI_IMAGE_INDEX_MEDIA_TYPE
-                && descriptor.artifact_type.as_deref() == Some(AI_CATALOG_MEDIA_TYPE)
+                && descriptor.artifact_type.as_deref() == Some(MEDIA_TYPE_CATALOG)
         })
         .collect();
 
@@ -858,13 +857,13 @@ mod tests {
     use std::path::{Path, PathBuf};
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    use ai_catalog::{parse_file, parse_str};
+    use ai_catalog::{MEDIA_TYPE_CATALOG, parse_file, parse_str};
     use serde_json::json;
 
     use super::{
-        AI_CATALOG_MEDIA_TYPE, COSIGN_PUBLIC_KEY_ARTIFACT_TYPE, COSIGN_SIGNATURE_ARTIFACT_TYPE,
-        ENTRY_CONFIG_MEDIA_TYPE, Error, OCI_IMAGE_INDEX_MEDIA_TYPE, OCI_IMAGE_MANIFEST_MEDIA_TYPE,
-        OCI_LAYOUT_VERSION, OCI_REF_NAME_ANNOTATION, TRUST_MANIFEST_ARTIFACT_TYPE,
+        COSIGN_PUBLIC_KEY_ARTIFACT_TYPE, COSIGN_SIGNATURE_ARTIFACT_TYPE, ENTRY_CONFIG_MEDIA_TYPE,
+        Error, OCI_IMAGE_INDEX_MEDIA_TYPE, OCI_IMAGE_MANIFEST_MEDIA_TYPE, OCI_LAYOUT_VERSION,
+        OCI_REF_NAME_ANNOTATION, TRUST_MANIFEST_ARTIFACT_TYPE,
         attach_cosign_verification_artifacts, descriptor_for_bytes, export_layout, import_layout,
         pack_catalog, unpack_catalog,
     };
@@ -882,7 +881,7 @@ mod tests {
 
         assert_eq!(
             artifacts.index.artifact_type.as_deref(),
-            Some(AI_CATALOG_MEDIA_TYPE)
+            Some(MEDIA_TYPE_CATALOG)
         );
         assert_eq!(artifacts.index.manifests.len(), catalog.entries.len());
         assert_eq!(unpacked, catalog);
@@ -1043,7 +1042,7 @@ mod tests {
         assert_eq!(root_index.media_type, OCI_IMAGE_INDEX_MEDIA_TYPE);
         assert_eq!(
             root_index.artifact_type.as_deref(),
-            Some(AI_CATALOG_MEDIA_TYPE)
+            Some(MEDIA_TYPE_CATALOG)
         );
         assert_eq!(root_index.manifests.len(), catalog.entries.len());
 
@@ -1150,7 +1149,7 @@ mod tests {
 
         assert_eq!(
             imported.index.artifact_type.as_deref(),
-            Some(AI_CATALOG_MEDIA_TYPE)
+            Some(MEDIA_TYPE_CATALOG)
         );
         assert_eq!(unpacked, catalog);
 
