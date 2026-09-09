@@ -4,10 +4,17 @@
 
 mod error;
 mod identity;
+mod media;
 mod model;
 
 pub use error::{Error, Result};
 pub use identity::{identity_binds_to_entry, identity_domain, publisher_domain};
+pub use media::{
+    MEDIA_TYPE_A2A_AGENT_CARD, MEDIA_TYPE_AGENT_CARD, MEDIA_TYPE_AGENT_PLUGINS_GZIP,
+    MEDIA_TYPE_AGENT_PLUGINS_ZIP, MEDIA_TYPE_AGENT_SKILLS_GZIP, MEDIA_TYPE_AGENT_SKILLS_JSON,
+    MEDIA_TYPE_AGENT_SKILLS_MARKDOWN, MEDIA_TYPE_AGENT_SKILLS_ZIP, MEDIA_TYPE_CATALOG,
+    MEDIA_TYPE_MCP_SERVER_CARD,
+};
 pub use model::{
     AiCatalog, Attestation, CatalogEntry, HostInfo, ProvenanceLink, Publisher, Subject,
     TrustManifest, TrustSchema,

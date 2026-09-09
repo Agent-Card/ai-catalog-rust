@@ -6,8 +6,9 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::LazyLock;
 
 use ai_catalog::{
-    AiCatalog, Attestation, CatalogEntry, HostInfo, ProvenanceLink, Publisher, Subject,
-    TrustManifest, TrustSchema, identity_binds_to_entry, identity_domain, publisher_domain,
+    AiCatalog, Attestation, CatalogEntry, HostInfo, MEDIA_TYPE_CATALOG, ProvenanceLink, Publisher,
+    Subject, TrustManifest, TrustSchema, identity_binds_to_entry, identity_domain,
+    publisher_domain,
 };
 use regex::Regex;
 use time::OffsetDateTime;
@@ -248,7 +249,7 @@ fn validate_entry(
         }
     }
 
-    if entry.entry_type == "application/ai-catalog+json" {
+    if entry.entry_type == MEDIA_TYPE_CATALOG {
         if depth >= MAX_NESTING_DEPTH {
             push_error(
                 errors,
