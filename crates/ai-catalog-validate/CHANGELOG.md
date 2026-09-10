@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0](https://github.com/Agent-Card/ai-catalog-rust/compare/ai-catalog-validate-v0.2.1...ai-catalog-validate-v0.3.0) - 2026-09-10
+
+### Added
+
+- add known media type constants ([#23](https://github.com/Agent-Card/ai-catalog-rust/pull/23))
+
 ## [0.2.1](https://github.com/Agent-Card/ai-catalog-rust/compare/ai-catalog-validate-v0.2.0...ai-catalog-validate-v0.2.1) - 2026-09-01
 
 ### Other
