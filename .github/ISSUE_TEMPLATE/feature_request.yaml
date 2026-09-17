@@ -1,3 +1,6 @@
+# Copyright AI-Catalog Contributors (https://github.com/Agent-Card/ai-catalog-rust)
+# SPDX-License-Identifier: Apache-2.0
+
 ---
 name: Feature Request
 description: Suggest a feature for this project.
