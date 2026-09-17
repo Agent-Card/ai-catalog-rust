@@ -1,0 +1,59 @@
+# Copyright AI-Catalog Contributors (https://github.com/Agent-Card/ai-catalog-rust)
+# SPDX-License-Identifier: Apache-2.0
+
+---
+name: Bug Report
+description: Report a bug to help us improve.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report!
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: Please provide a description of the problem
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: Please describe what you expected would happen
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Affected Version
+      description: |
+        If applicable, the crate and version where this issue was encountered.
+        A branch name or commit SHA is also fine.
+      placeholder: ai-catalog-trust-v0.1.0
+    validations:
+      required: false
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Please provide all steps to reproduce the behavior
+      placeholder: |
+        1. In this environment...
+        1. With this config...
+        1. Run `this command`...
+        1. See error...
+    validations:
+      required: true
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      description: By submitting this issue, you agree to the following
+      options:
+        - label: I have read the [contributing guidelines](/Agent-Card/ai-catalog-rust/blob/main/CONTRIBUTING.md)
+          required: true
+        - label: I have verified this does not duplicate an existing issue
+          required: true
