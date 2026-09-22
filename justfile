@@ -2,6 +2,9 @@
 # Copyright AGNTCY Contributors (https://github.com/agntcy)
 # SPDX-License-Identifier: Apache-2.0
 
+# renovate: datasource=github-releases depName=renovatebot/renovate versioning=semver
+RENOVATE_VERSION := "44.107.0"
+
 default:
 	@just --list
 
@@ -22,3 +25,9 @@ coverage:
 	LLVM_COV="$toolchain_root/lib/rustlib/$host/bin/llvm-cov" \
 	LLVM_PROFDATA="$toolchain_root/lib/rustlib/$host/bin/llvm-profdata" \
 	cargo llvm-cov --workspace --summary-only
+
+renovate-sync *OPTS: _renovate
+	renovate --platform "${RENOVATE_PLATFORM:-local}" {{ OPTS }}
+
+_renovate:
+	npm list -g renovate@{{ RENOVATE_VERSION }} >/dev/null 2>&1 || npm install -g renovate@{{ RENOVATE_VERSION }}
