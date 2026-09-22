@@ -5,6 +5,12 @@
 # renovate: datasource=github-releases depName=renovatebot/renovate versioning=semver
 RENOVATE_VERSION := "44.107.0"
 
+BIN_DIR := justfile_directory() / ".bin"
+# The version is part of the path, so a bump installs fresh instead of
+# reusing whatever is already there.
+RENOVATE_HOME := BIN_DIR / ("renovate-" + RENOVATE_VERSION)
+RENOVATE_BIN := RENOVATE_HOME / "node_modules" / ".bin" / "renovate"
+
 default:
 	@just --list
 
@@ -26,8 +32,9 @@ coverage:
 	LLVM_PROFDATA="$toolchain_root/lib/rustlib/$host/bin/llvm-profdata" \
 	cargo llvm-cov --workspace --summary-only
 
+# Sync dependencies with Renovate (local and analytical unless RENOVATE_PLATFORM is set)
 renovate-sync *OPTS: _renovate
-	renovate --platform "${RENOVATE_PLATFORM:-local}" {{ OPTS }}
+	"{{ RENOVATE_BIN }}" --platform "${RENOVATE_PLATFORM:-local}" {{ OPTS }}
 
 _renovate:
-	npm list -g renovate@{{ RENOVATE_VERSION }} >/dev/null 2>&1 || npm install -g renovate@{{ RENOVATE_VERSION }}
+	[ -x "{{ RENOVATE_BIN }}" ] || npm install --prefix "{{ RENOVATE_HOME }}" --no-audit --no-fund --loglevel=error renovate@{{ RENOVATE_VERSION }}
