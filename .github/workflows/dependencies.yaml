@@ -1,0 +1,61 @@
+# Copyright AI-Catalog Contributors (https://github.com/Agent-Card/ai-catalog-rust)
+# SPDX-License-Identifier: Apache-2.0
+
+---
+name: Dependencies
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 */6 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  renovate:
+    name: Renovate Sync
+    runs-on: ubuntu-latest
+    steps:
+      - name: Authenticate with GitHub App Bot
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ secrets.PROJECT_APP_ID }}
+          private-key: ${{ secrets.PROJECT_APP_KEY }}
+
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          # Make sure the value of GITHUB_TOKEN will not be persisted in repo's config
+          persist-credentials: false
+
+      - name: Install just
+        uses: taiki-e/install-action@6155d2cb312b464292646e69dce00eee78f23151
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with:
+          toolchain: 1.95.0
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24.x"
+
+      - name: Run Renovate
+        run: just renovate-sync
+        env:
+          ## Discovery
+          RENOVATE_AUTODISCOVER: "true"
+          RENOVATE_AUTODISCOVER_FILTER: "${{ github.repository }}"
+          ## Project sync
+          RENOVATE_PLATFORM: "github"
+          RENOVATE_PLATFORM_COMMIT: "enabled"
+          RENOVATE_TOKEN: ${{ steps.app-token.outputs.token }}
+          GITHUB_COM_TOKEN: ${{ steps.app-token.outputs.token }}
+          # Remove unused fields from PR description
+          RENOVATE_PR_BODY_TEMPLATE: "{{{header}}}{{{table}}}{{{warnings}}}{{{notes}}}{{{changelogs}}}"
+          RENOVATE_DEPENDENCY_DASHBOARD_HEADER: ""
+          RENOVATE_DEPENDENCY_DASHBOARD_O_S_V_VULNERABILITY_SUMMARY: "all"

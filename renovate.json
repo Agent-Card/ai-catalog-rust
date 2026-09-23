@@ -1,0 +1,116 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    "helpers:pinGitHubActionDigestsToSemver",
+    ":semanticCommitTypeAll(chore)"
+  ],
+  "configMigration": true,
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/(^|/)justfile$/"
+      ],
+      "matchStrings": [
+        "(?m)^\\s*#\\s*renovate:\\s*datasource=(?<datasource>\\S+)\\s+depName=(?<depName>\\S+)(?:\\s+versioning=(?<versioning>\\S+))?(?:\\s+registryUrl=(?<registryUrl>\\S+))?\\s*\\r?\\n\\s*(?<varName>[A-Z0-9_]+)_VERSION\\s*:=\\s*\"(?<currentValue>[^\"@\\s]+)\"\\s*$"
+      ],
+      "currentValueTemplate": "{{currentValue}}",
+      "description": [
+        "Custom dependency manager for updating tool versions defined in the justfile."
+      ]
+    }
+  ],
+  "enabled": true,
+  "minimumReleaseAge": "7 days",
+  "schedule": [
+    "before 8am on Monday",
+    "before 8am on Wednesday",
+    "before 8am on Friday"
+  ],
+  "prCreation": "not-pending",
+  "enabledManagers": [
+    "custom.regex",
+    "github-actions",
+    "cargo"
+  ],
+  "labels": [
+    "dependencies"
+  ],
+  "osvVulnerabilityAlerts": true,
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["at any time"]
+  },
+  "packageRules": [
+    {
+      "groupName": "Rust",
+      "groupSlug": "rust",
+      "matchManagers": [
+        "cargo"
+      ],
+      "addLabels": [
+        "rust"
+      ],
+      "description": [
+        "Add rust label to PRs which bump crate dependencies.",
+        "Group crate dependency updates in a single PR."
+      ]
+    },
+    {
+      "groupName": "Justfile",
+      "groupSlug": "justfile",
+      "matchFileNames": [
+        "justfile"
+      ],
+      "addLabels": [
+        "build"
+      ],
+      "description": [
+        "Add build label to PRs which are related to build tools defined in the justfile.",
+        "Group justfile dependency updates in a single PR."
+      ]
+    },
+    {
+      "groupName": "Github Actions",
+      "groupSlug": "github-actions",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "addLabels": [
+        "ci"
+      ],
+      "description": [
+        "Add ci label to PRs which are related to Github Actions.",
+        "Group CI dependency updates in a single PR."
+      ]
+    },
+    {
+      "matchJsonata": [
+        "$exists(vulnerabilityFixVersion) or isVulnerabilityAlert = true"
+      ],
+      "enabled": true,
+      "description": [
+        "Always allow vulnerability/security fixes, even when other rules disable specific dependencies."
+      ]
+    }
+  ],
+  "postUpdateOptions": [],
+  "prConcurrentLimit": 20,
+  "prHourlyLimit": 10,
+  "printConfig": false,
+  "rebaseWhen": "behind-base-branch",
+  "reviewersFromCodeOwners": true,
+  "semanticCommits": "enabled",
+  "timezone": "Etc/UTC",
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": [
+      "security"
+    ],
+    "minimumReleaseAge": null,
+    "schedule": [
+      "at any time"
+    ]
+  }
+}
