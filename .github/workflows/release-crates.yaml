@@ -30,7 +30,7 @@ jobs:
       - name: Setup Rust
         uses: ./.github/actions/setup-rust
       - name: Run release-plz
-        uses: release-plz/action@2eb1d8bcb770b4c48ccfaad919734b38b51958c9 # v0.5.131
+        uses: release-plz/action@d6c56271d640b6c1b61d1e00593641c400a9f4bd # v0.5.138
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -57,7 +57,7 @@ jobs:
       - name: Setup Rust
         uses: ./.github/actions/setup-rust
       - name: Run release-plz - PR
-        uses: release-plz/action@2eb1d8bcb770b4c48ccfaad919734b38b51958c9 # v0.5.131
+        uses: release-plz/action@d6c56271d640b6c1b61d1e00593641c400a9f4bd # v0.5.138
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
