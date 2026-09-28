@@ -84,3 +84,20 @@ jobs:
         with:
           name: coverage-summary
           path: coverage-summary.txt
+
+  success:
+    name: Success
+    needs:
+      - build-lint-test
+      - coverage
+    # This gate must run even when a dependency fails. A job that is skipped
+    # reports its status as "Success" and does not block a required check, so
+    # the failure has to be raised explicitly below.
+    # https://github.com/actions/runner/issues/2566
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check dependency results
+        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped') }}
+        run: exit 1
