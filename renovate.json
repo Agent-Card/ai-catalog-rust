@@ -28,7 +28,6 @@
     "before 8am on Wednesday",
     "before 8am on Friday"
   ],
-  "prCreation": "not-pending",
   "enabledManagers": [
     "custom.regex",
     "github-actions",
