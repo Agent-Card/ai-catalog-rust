@@ -38,6 +38,7 @@ version = "0.2.1"
 dependencies = [
  "ai-catalog",
  "base64",
+ "serde",
  "serde_jcs",
  "serde_json",
  "sha2",
