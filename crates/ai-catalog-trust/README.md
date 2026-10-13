@@ -15,8 +15,17 @@ RECOMMENDED nesting depth of 4. A finding's `path` records where it was found, f
 
 Canonicalization follows [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785) (JCS), so the
 payload a signature covers is byte-identical to the one produced by other conforming
-implementations. `canonicalize_trust_manifest` and `canonicalize_catalog` produce the
-payloads for manifest-level and document-level signatures respectively.
+implementations.
+
+- `canonicalize_for_signature` returns the payload a document-level `signature` covers.
+  Pass the original JSON, not a re-serialized `AiCatalog`, which drops empty arrays and
+  strings, `null`s and members the SDK does not model.
+- `canonicalize_trust_manifest` returns the payload for a manifest-level signature, from
+  the JSON the manifest was read from. A manifest built in code or changed after reading
+  is canonicalized from its serialization.
+- `canonicalize` returns the canonical form of any JSON document.
+
+Duplicate member names are rejected.
 
 ## Usage
 

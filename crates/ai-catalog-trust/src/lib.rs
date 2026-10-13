@@ -6,9 +6,13 @@ use ai_catalog::{
     AiCatalog, CatalogEntry, HostInfo, Subject, TrustManifest, identity_binds_to_entry,
     identity_domain, publisher_domain,
 };
+use std::fmt;
+
 use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD as BASE64_URL_SAFE_NO_PAD;
-use serde_json::Value;
+use serde::de::{self, MapAccess, SeqAccess, Visitor};
+use serde::{Deserialize, Deserializer};
+use serde_json::{Map, Number, Value};
 use sha2::{Digest as _, Sha256, Sha384, Sha512};
 use thiserror::Error;
 use time::OffsetDateTime;
@@ -123,24 +127,112 @@ impl ParsedDigest {
     }
 }
 
-pub fn canonicalize_trust_manifest(manifest: &TrustManifest) -> Result<String> {
-    let mut value = serde_json::to_value(manifest)?;
+/// Returns the JCS (RFC 8785) form of a JSON document, rejecting duplicate member names.
+pub fn canonicalize(json: impl AsRef<[u8]>) -> Result<String> {
+    let StrictValue(value) = serde_json::from_slice(json.as_ref())?;
+
+    serde_jcs::to_string(&value).map_err(Error::from)
+}
+
+/// Returns the JCS form of the original JSON without its top-level `signature`, the payload a detached JWS covers.
+pub fn canonicalize_for_signature(json: impl AsRef<[u8]>) -> Result<String> {
+    let StrictValue(mut value) = serde_json::from_slice(json.as_ref())?;
 
     if let Value::Object(object) = &mut value {
-        object.remove("signature");
+        object.remove(SIGNATURE_MEMBER);
     }
 
     serde_jcs::to_string(&value).map_err(Error::from)
 }
 
-pub fn canonicalize_catalog(catalog: &AiCatalog) -> Result<String> {
-    let mut value = serde_json::to_value(catalog)?;
+/// Returns the signing payload for a manifest, from the JSON it was decoded from or, if it was
+/// built in code or changed since, from its serialization.
+pub fn canonicalize_trust_manifest(manifest: &TrustManifest) -> Result<String> {
+    let mut value = match manifest.decoded_json() {
+        Some(json) => json.clone(),
+        None => serde_json::to_value(manifest)?,
+    };
 
     if let Value::Object(object) = &mut value {
-        object.remove("signature");
+        object.remove(SIGNATURE_MEMBER);
     }
 
     serde_jcs::to_string(&value).map_err(Error::from)
+}
+
+const SIGNATURE_MEMBER: &str = "signature";
+
+// Rejects duplicate member names, which `serde_json::Value` resolves silently.
+struct StrictValue(Value);
+
+impl<'de> Deserialize<'de> for StrictValue {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> std::result::Result<Self, D::Error> {
+        deserializer.deserialize_any(StrictVisitor)
+    }
+}
+
+struct StrictVisitor;
+
+impl<'de> Visitor<'de> for StrictVisitor {
+    type Value = StrictValue;
+
+    fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("any JSON value")
+    }
+
+    fn visit_bool<E: de::Error>(self, v: bool) -> std::result::Result<StrictValue, E> {
+        Ok(StrictValue(Value::Bool(v)))
+    }
+
+    fn visit_i64<E: de::Error>(self, v: i64) -> std::result::Result<StrictValue, E> {
+        Ok(StrictValue(v.into()))
+    }
+
+    fn visit_u64<E: de::Error>(self, v: u64) -> std::result::Result<StrictValue, E> {
+        Ok(StrictValue(v.into()))
+    }
+
+    fn visit_f64<E: de::Error>(self, v: f64) -> std::result::Result<StrictValue, E> {
+        Number::from_f64(v)
+            .map(|number| StrictValue(Value::Number(number)))
+            .ok_or_else(|| E::custom("number is not finite"))
+    }
+
+    fn visit_str<E: de::Error>(self, v: &str) -> std::result::Result<StrictValue, E> {
+        Ok(StrictValue(Value::String(v.to_owned())))
+    }
+
+    fn visit_unit<E: de::Error>(self) -> std::result::Result<StrictValue, E> {
+        Ok(StrictValue(Value::Null))
+    }
+
+    fn visit_seq<A: SeqAccess<'de>>(
+        self,
+        mut seq: A,
+    ) -> std::result::Result<StrictValue, A::Error> {
+        let mut items = Vec::new();
+
+        while let Some(StrictValue(item)) = seq.next_element()? {
+            items.push(item);
+        }
+
+        Ok(StrictValue(Value::Array(items)))
+    }
+
+    fn visit_map<A: MapAccess<'de>>(
+        self,
+        mut map: A,
+    ) -> std::result::Result<StrictValue, A::Error> {
+        let mut object = Map::new();
+
+        while let Some((name, StrictValue(value))) = map.next_entry::<String, StrictValue>()? {
+            if object.insert(name.clone(), value).is_some() {
+                return Err(de::Error::custom(format!("duplicate member name '{name}'")));
+            }
+        }
+
+        Ok(StrictValue(Value::Object(object)))
+    }
 }
 
 pub fn verify_digest(expected_digest: &str, bytes: &[u8]) -> Result<bool> {
@@ -567,8 +659,8 @@ mod tests {
     use ai_catalog::parse_str;
 
     use super::{
-        CatalogTrustReport, Error, ParsedDigest, Severity, analyze_catalog, canonicalize_catalog,
-        canonicalize_trust_manifest, verify_digest,
+        CatalogTrustReport, Error, ParsedDigest, Severity, analyze_catalog, canonicalize,
+        canonicalize_for_signature, canonicalize_trust_manifest, verify_digest,
     };
 
     #[test]
@@ -765,15 +857,107 @@ mod tests {
 
     #[test]
     fn canonicalizes_catalog_without_signature() {
-        let catalog = parse_str(
+        let canonical = canonicalize_for_signature(
             r#"{"specVersion":"1.0","entries":[],"signature":"eyJhbGciOiJFUzI1NiJ9..c2ln"}"#,
         )
-        .expect("document should parse");
+        .expect("canonicalizes");
 
-        let canonical = canonicalize_catalog(&catalog).expect("canonicalizes");
-
-        assert!(!canonical.contains("signature"));
         assert_eq!(canonical, r#"{"entries":[],"specVersion":"1.0"}"#);
+    }
+
+    #[test]
+    fn signature_payload_keeps_what_the_model_drops() {
+        let canonical = canonicalize_for_signature(
+            r#"{
+              "specVersion": "1.0",
+              "entries": [{
+                "identifier": "urn:air:acme.com:agent:a",
+                "type": "application/a2a-agent-card+json",
+                "url": "https://acme.com/a.json",
+                "tags": [],
+                "description": "",
+                "version": null,
+                "com.example.unknown": {}
+              }],
+              "signature": "eyJhbGciOiJFUzI1NiJ9..c2ln"
+            }"#,
+        )
+        .expect("canonicalizes");
+
+        assert_eq!(
+            canonical,
+            concat!(
+                r#"{"entries":[{"com.example.unknown":{},"description":"","#,
+                r#""identifier":"urn:air:acme.com:agent:a","tags":[],"#,
+                r#""type":"application/a2a-agent-card+json","#,
+                r#""url":"https://acme.com/a.json","version":null}],"specVersion":"1.0"}"#,
+            ),
+        );
+    }
+
+    #[test]
+    fn decoded_manifest_is_canonicalized_as_published() {
+        let catalog = parse_str(
+            r#"{
+              "specVersion": "1.0",
+              "entries": [{
+                "identifier": "urn:air:acme.com:agent:a",
+                "type": "application/a2a-agent-card+json",
+                "url": "https://acme.com/a.json",
+                "trustManifest": {
+                  "identity": "did:web:acme.com",
+                  "attestations": [],
+                  "privacyPolicyUrl": "",
+                  "signature": "eyJhbGciOiJFUzI1NiJ9..c2ln"
+                }
+              }]
+            }"#,
+        )
+        .expect("document should parse");
+        let manifest = catalog.entries[0]
+            .trust_manifest
+            .as_ref()
+            .expect("manifest");
+
+        assert_eq!(
+            canonicalize_trust_manifest(manifest).expect("canonicalizes"),
+            r#"{"attestations":[],"identity":"did:web:acme.com","privacyPolicyUrl":""}"#,
+        );
+    }
+
+    #[test]
+    fn changed_manifest_is_canonicalized_from_its_fields() {
+        let catalog = parse_str(
+            r#"{
+              "specVersion": "1.0",
+              "entries": [{
+                "identifier": "urn:air:acme.com:agent:a",
+                "type": "application/a2a-agent-card+json",
+                "url": "https://acme.com/a.json",
+                "trustManifest": { "identity": "did:web:acme.com", "attestations": [] }
+              }]
+            }"#,
+        )
+        .expect("document should parse");
+        let mut manifest = catalog.entries[0].trust_manifest.clone().expect("manifest");
+
+        manifest.identity = "did:web:other.example".to_owned();
+
+        assert_eq!(
+            canonicalize_trust_manifest(&manifest).expect("canonicalizes"),
+            r#"{"identity":"did:web:other.example"}"#,
+        );
+    }
+
+    #[test]
+    fn canonicalization_rejects_duplicate_members() {
+        for json in [r#"{"a":1,"a":2}"#, r#"{"entries":[{"a":1,"b":2,"a":3}]}"#] {
+            assert!(matches!(canonicalize(json), Err(Error::Json(_))), "{json}");
+            assert!(
+                matches!(canonicalize_for_signature(json), Err(Error::Json(_))),
+                "{json}"
+            );
+        }
     }
 
     #[test]

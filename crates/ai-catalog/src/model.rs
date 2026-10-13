@@ -144,8 +144,8 @@ pub struct Publisher {
     pub extra_fields: BTreeMap<String, Value>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(remote = "Self", rename_all = "camelCase")]
 pub struct TrustManifest {
     #[serde(default)]
     pub identity: String,
@@ -173,6 +173,51 @@ pub struct TrustManifest {
     pub extensions: Option<BTreeMap<String, Value>>,
     #[serde(flatten, default)]
     pub extra_fields: BTreeMap<String, Value>,
+    #[serde(skip)]
+    decoded: Decoded,
+}
+
+// The JSON a manifest was decoded from; ignored by serialization and equality.
+#[derive(Default, Clone)]
+struct Decoded(Option<Value>);
+
+impl PartialEq for Decoded {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+
+impl std::fmt::Debug for Decoded {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Decoded(..)")
+    }
+}
+
+impl Serialize for TrustManifest {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        Self::serialize(self, serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for TrustManifest {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let json = Value::deserialize(deserializer)?;
+        let mut manifest = Self::deserialize(&json).map_err(serde::de::Error::custom)?;
+
+        manifest.decoded = Decoded(Some(json));
+
+        Ok(manifest)
+    }
+}
+
+impl TrustManifest {
+    /// Returns the JSON the manifest was decoded from, unless it was built in code or changed since.
+    pub fn decoded_json(&self) -> Option<&Value> {
+        let json = self.decoded.0.as_ref()?;
+        let current: Self = serde_json::from_value(json.clone()).ok()?;
+
+        (current == *self).then_some(json)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
