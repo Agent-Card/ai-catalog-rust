@@ -38,6 +38,7 @@ version = "0.2.1"
 dependencies = [
  "ai-catalog",
  "base64",
+ "serde",
  "serde_jcs",
  "serde_json",
  "sha2",
@@ -50,6 +51,7 @@ name = "ai-catalog-validate"
 version = "0.2.1"
 dependencies = [
  "ai-catalog",
+ "ai-catalog-trust",
  "regex",
  "serde_json",
  "time",
