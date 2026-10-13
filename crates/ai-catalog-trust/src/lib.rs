@@ -248,7 +248,7 @@ pub fn analyze_catalog(catalog: &AiCatalog) -> CatalogTrustReport {
     let mut findings = Vec::new();
 
     if let Some(signature) = &catalog.signature {
-        analyze_signature_algorithm("catalog.signature", signature, &mut findings);
+        analyze_signature_problem("catalog.signature", signature, &mut findings);
     }
 
     findings.extend(
@@ -480,66 +480,89 @@ fn analyze_signature(path: &str, manifest: &TrustManifest, findings: &mut Vec<Fi
         return;
     };
 
-    if !looks_like_detached_jws(signature) {
-        findings.push(Finding {
-            severity: Severity::Error,
-            path: format!("{path}.signature"),
-            message: "signature must use detached JWS compact serialization".to_owned(),
-        });
+    let problem = check_signature(signature);
 
-        return;
+    if problem != Some(SignatureProblem::NotDetached) {
+        if manifest.subject.is_none() {
+            findings.push(Finding {
+                severity: Severity::Error,
+                path: format!("{path}.subject"),
+                message: "a signed trust manifest must carry a subject binding it to the artifact"
+                    .to_owned(),
+            });
+        }
+
+        if manifest.issued_at.is_none() {
+            findings.push(Finding {
+                severity: Severity::Error,
+                path: format!("{path}.issuedAt"),
+                message: "a signed trust manifest must carry an issuedAt timestamp".to_owned(),
+            });
+        }
     }
 
-    if manifest.subject.is_none() {
-        findings.push(Finding {
-            severity: Severity::Error,
-            path: format!("{path}.subject"),
-            message: "a signed trust manifest must carry a subject binding it to the artifact"
-                .to_owned(),
-        });
-    }
-
-    if manifest.issued_at.is_none() {
-        findings.push(Finding {
-            severity: Severity::Error,
-            path: format!("{path}.issuedAt"),
-            message: "a signed trust manifest must carry an issuedAt timestamp".to_owned(),
-        });
-    }
-
-    analyze_signature_algorithm(&format!("{path}.signature"), signature, findings);
+    analyze_signature_problem(&format!("{path}.signature"), signature, findings);
 }
 
-fn analyze_signature_algorithm(path: &str, signature: &str, findings: &mut Vec<Finding>) {
-    let Some(algorithm) = jws_algorithm(signature) else {
-        findings.push(Finding {
-            severity: Severity::Error,
-            path: path.to_owned(),
-            message: "signature JWS header must be base64url-encoded JSON declaring an 'alg'"
-                .to_owned(),
-        });
-
+fn analyze_signature_problem(path: &str, signature: &str, findings: &mut Vec<Finding>) {
+    let Some(problem) = check_signature(signature) else {
         return;
     };
 
+    findings.push(Finding {
+        severity: if problem.is_warning() {
+            Severity::Warning
+        } else {
+            Severity::Error
+        },
+        path: path.to_owned(),
+        message: problem.to_string(),
+    });
+}
+
+/// Why a signature cannot establish third-party trust.
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum SignatureProblem {
+    #[error("signature must use detached JWS compact serialization")]
+    NotDetached,
+    #[error("signature JWS header must be base64url-encoded JSON declaring an 'alg'")]
+    UnreadableHeader,
+    #[error(
+        "signature algorithm '{0}' must be rejected; a trust manifest requires an asymmetric \
+         signature"
+    )]
+    Forbidden(String),
+    #[error(
+        "signature algorithm '{0}' is outside the specification allowlist ({allowed})",
+        allowed = ALLOWED_JWS_ALGORITHMS.join(", ")
+    )]
+    OutsideAllowlist(String),
+}
+
+impl SignatureProblem {
+    /// Whether the problem is advisory. Every other problem is an error.
+    pub fn is_warning(&self) -> bool {
+        matches!(self, Self::OutsideAllowlist(_))
+    }
+}
+
+/// Checks a detached JWS against the signature policy: compact serialization with the
+/// payload omitted, and an asymmetric algorithm (never `none` or the HMAC family).
+pub fn check_signature(signature: &str) -> Option<SignatureProblem> {
+    if !looks_like_detached_jws(signature) {
+        return Some(SignatureProblem::NotDetached);
+    }
+
+    let Some(algorithm) = jws_algorithm(signature) else {
+        return Some(SignatureProblem::UnreadableHeader);
+    };
+
     if is_forbidden_jws_algorithm(&algorithm) {
-        findings.push(Finding {
-            severity: Severity::Error,
-            path: path.to_owned(),
-            message: format!(
-                "signature algorithm '{algorithm}' must be rejected; a trust manifest requires an \
-                 asymmetric signature"
-            ),
-        });
+        Some(SignatureProblem::Forbidden(algorithm))
     } else if !ALLOWED_JWS_ALGORITHMS.contains(&algorithm.as_str()) {
-        findings.push(Finding {
-            severity: Severity::Warning,
-            path: path.to_owned(),
-            message: format!(
-                "signature algorithm '{algorithm}' is outside the specification allowlist ({})",
-                ALLOWED_JWS_ALGORITHMS.join(", ")
-            ),
-        });
+        Some(SignatureProblem::OutsideAllowlist(algorithm))
+    } else {
+        None
     }
 }
 

@@ -51,6 +51,7 @@ name = "ai-catalog-validate"
 version = "0.2.1"
 dependencies = [
  "ai-catalog",
+ "ai-catalog-trust",
  "regex",
  "serde_json",
  "time",

@@ -10,6 +10,7 @@ use ai_catalog::{
     Subject, TrustManifest, TrustSchema, identity_binds_to_entry, identity_domain,
     publisher_domain,
 };
+use ai_catalog_trust::{ParsedDigest, check_signature};
 use regex::Regex;
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
@@ -113,6 +114,10 @@ fn validate_catalog(
         &format!("{path}.extensions"),
         errors,
     );
+
+    if let Some(signature) = &catalog.signature {
+        validate_signature(signature, &format!("{path}.signature"), errors, warnings);
+    }
 
     let mut seen_versioned: HashMap<(&str, &str), usize> = HashMap::new();
     let mut seen_unversioned: HashMap<&str, usize> = HashMap::new();
@@ -370,6 +375,10 @@ fn validate_attestation(attestation: &Attestation, path: &str, errors: &mut Vec<
         "attestation.uri",
         errors,
     );
+
+    if let Some(digest) = &attestation.digest {
+        validate_digest(digest, &format!("{path}.digest"), errors);
+    }
 }
 
 fn validate_provenance_link(link: &ProvenanceLink, path: &str, errors: &mut Vec<Diagnostic>) {
@@ -385,6 +394,10 @@ fn validate_provenance_link(link: &ProvenanceLink, path: &str, errors: &mut Vec<
         "provenance.sourceId",
         errors,
     );
+
+    if let Some(digest) = &link.source_digest {
+        validate_digest(digest, &format!("{path}.sourceDigest"), errors);
+    }
 }
 
 fn validate_host(
@@ -452,6 +465,11 @@ fn validate_trust_manifest(
     }
 
     validate_signed_manifest_members(manifest, path, errors);
+
+    if let Some(signature) = &manifest.signature {
+        validate_signature(signature, &format!("{path}.signature"), errors, warnings);
+    }
+
     validate_manifest_timestamps(manifest, path, errors, warnings);
     validate_subject(
         manifest.subject.as_ref(),
@@ -554,6 +572,34 @@ fn validate_subject(subject: Option<&Subject>, path: &str, errors: &mut Vec<Diag
             format!("{path}.digest"),
             "subject.digest is required and must not be empty".to_owned(),
         );
+    } else {
+        validate_digest(&subject.digest, &format!("{path}.digest"), errors);
+    }
+}
+
+fn validate_digest(digest: &str, path: &str, errors: &mut Vec<Diagnostic>) {
+    if let Err(error) = ParsedDigest::parse(digest) {
+        push_error(errors, path.to_owned(), error.to_string());
+    }
+}
+
+fn validate_signature(
+    signature: &str,
+    path: &str,
+    errors: &mut Vec<Diagnostic>,
+    warnings: &mut Vec<Diagnostic>,
+) {
+    let Some(problem) = check_signature(signature) else {
+        return;
+    };
+
+    if problem.is_warning() {
+        warnings.push(Diagnostic {
+            path: path.to_owned(),
+            message: problem.to_string(),
+        });
+    } else {
+        push_error(errors, path.to_owned(), problem.to_string());
     }
 }
 
@@ -898,7 +944,7 @@ mod tests {
                         "signature": "eyJhbGciOiJFUzI1NiJ9..c2ln",
                         "subject": {
                             "type": "application/gguf",
-                            "digest": "sha256:abc",
+                            "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
                             "url": "https://example.com/other.json"
                         }
                     }
@@ -1055,7 +1101,7 @@ mod tests {
                         "signature": "eyJhbGciOiJFUzI1NiJ9..c2ln",
                         "subject": {
                             "type": "application/json",
-                            "digest": "sha256:abc",
+                            "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
                             "url": "https://example.com/expired.json"
                         }
                     }
@@ -1109,7 +1155,7 @@ mod tests {
                         "signature": "eyJhbGciOiJFUzI1NiJ9..c2ln",
                         "subject": {
                             "type": "application/json",
-                            "digest": "sha256:abc",
+                            "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
                             "url": "https://example.com/trusted.json"
                         }
                     }
@@ -1449,6 +1495,135 @@ mod tests {
                 .message
                 .contains("nested catalog depth exceeds recommended limit")
         }));
+    }
+
+    const SHA256_EMPTY: &str =
+        "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+
+    fn signed_catalog(manifest: serde_json::Value) -> serde_json::Value {
+        let mut manifest_value = json!({
+            "identity": "did:web:acme.com",
+            "issuedAt": "2026-01-01T00:00:00Z",
+            "signature": "eyJhbGciOiJFUzI1NiJ9..c2ln",
+            "subject": {
+                "type": "application/a2a-agent-card+json",
+                "url": "https://acme.com/finance.json",
+                "digest": SHA256_EMPTY,
+            },
+        });
+
+        manifest_value
+            .as_object_mut()
+            .expect("object")
+            .extend(manifest.as_object().expect("object").clone());
+
+        json!({
+            "specVersion": "1.0",
+            "host": { "displayName": "Acme" },
+            "entries": [{
+                "identifier": "urn:air:acme.com:agent:finance",
+                "type": "application/a2a-agent-card+json",
+                "url": "https://acme.com/finance.json",
+                "trustManifest": manifest_value,
+            }],
+        })
+    }
+
+    #[test]
+    fn signed_catalog_with_strong_signature_and_digest_is_trusted() {
+        let result = validate_value(signed_catalog(json!({})));
+
+        assert!(result.is_valid, "{:?}", result.errors);
+        assert_eq!(result.conformance_level, ConformanceLevel::Trusted);
+    }
+
+    #[test]
+    fn rejects_weak_signatures_and_digests() {
+        let manifest = "catalog.entries[0].trustManifest";
+        let cases = [
+            (
+                json!({"signature": "eyJhbGciOiJub25lIn0..c2ln"}),
+                format!("{manifest}.signature"),
+            ),
+            (
+                json!({"signature": "eyJhbGciOiJIUzI1NiJ9..c2ln"}),
+                format!("{manifest}.signature"),
+            ),
+            (
+                json!({"signature": "not-a-jws"}),
+                format!("{manifest}.signature"),
+            ),
+            (
+                json!({"subject": {
+                    "type": "application/a2a-agent-card+json",
+                    "url": "https://acme.com/finance.json",
+                    "digest": "md5:0123456789abcdef0123456789abcdef",
+                }}),
+                format!("{manifest}.subject.digest"),
+            ),
+            (
+                json!({"attestations": [{
+                    "type": "SOC2-Type2",
+                    "uri": "https://acme.com/soc2.pdf",
+                    "digest": "sha1:0123456789abcdef0123456789abcdef01234567",
+                }]}),
+                format!("{manifest}.attestations[0].digest"),
+            ),
+            (
+                json!({"provenance": [{
+                    "relation": "derivedFrom",
+                    "sourceId": "https://github.com/acme/finance",
+                    "sourceDigest": "sha256:abc",
+                }]}),
+                format!("{manifest}.provenance[0].sourceDigest"),
+            ),
+        ];
+
+        for (overrides, path) in cases {
+            let result = validate_value(signed_catalog(overrides.clone()));
+
+            assert!(!result.is_valid, "{overrides}");
+            assert_eq!(result.conformance_level, ConformanceLevel::Minimal);
+            assert!(
+                result
+                    .errors
+                    .iter()
+                    .any(|diagnostic| diagnostic.path == path),
+                "expected an error at {path}, got {:?}",
+                result.errors
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_weak_catalog_signature() {
+        let mut catalog = signed_catalog(json!({}));
+
+        catalog["signature"] = json!("eyJhbGciOiJub25lIn0..c2ln");
+
+        let result = validate_value(catalog);
+
+        assert!(!result.is_valid);
+        assert!(
+            result
+                .errors
+                .iter()
+                .any(|diagnostic| diagnostic.path == "catalog.signature")
+        );
+    }
+
+    #[test]
+    fn warns_on_algorithm_outside_the_allowlist() {
+        let result = validate_value(signed_catalog(
+            json!({"signature": "eyJhbGciOiJFUzUxMiJ9..c2ln"}),
+        ));
+
+        assert!(result.is_valid, "{:?}", result.errors);
+        assert!(
+            result.warnings.iter().any(|diagnostic| {
+                diagnostic.path == "catalog.entries[0].trustManifest.signature"
+            })
+        );
     }
 
     fn validate_value(value: serde_json::Value) -> ValidationResult {
