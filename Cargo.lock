@@ -13,7 +13,7 @@ dependencies = [
 
 [[package]]
 name = "ai-catalog"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "regex",
  "serde",
@@ -23,7 +23,7 @@ dependencies = [
 
 [[package]]
 name = "ai-catalog-oci"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "ai-catalog",
  "serde",
@@ -34,7 +34,7 @@ dependencies = [
 
 [[package]]
 name = "ai-catalog-trust"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "ai-catalog",
  "serde",
@@ -46,7 +46,7 @@ dependencies = [
 
 [[package]]
 name = "ai-catalog-validate"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "ai-catalog",
  "ai-catalog-trust",
