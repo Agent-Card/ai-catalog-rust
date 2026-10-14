@@ -854,461 +854,38 @@ impl From<&CatalogEntry> for EntryConfig {
 #[cfg(test)]
 mod tests {
     use std::fs;
-    use std::path::{Path, PathBuf};
+    use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    use ai_catalog::{MEDIA_TYPE_CATALOG, parse_file, parse_str};
-    use serde_json::json;
+    use ai_catalog::{AiCatalog, MEDIA_TYPE_CATALOG, parse_file, parse_str};
 
     use super::{
-        COSIGN_PUBLIC_KEY_ARTIFACT_TYPE, COSIGN_SIGNATURE_ARTIFACT_TYPE, ENTRY_CONFIG_MEDIA_TYPE,
-        Error, OCI_IMAGE_INDEX_MEDIA_TYPE, OCI_IMAGE_MANIFEST_MEDIA_TYPE, OCI_LAYOUT_VERSION,
-        OCI_REF_NAME_ANNOTATION, TRUST_MANIFEST_ARTIFACT_TYPE,
-        attach_cosign_verification_artifacts, descriptor_for_bytes, export_layout, import_layout,
-        pack_catalog, unpack_catalog,
+        COSIGN_PUBLIC_KEY_ARTIFACT_TYPE, COSIGN_SIGNATURE_ARTIFACT_TYPE, Error,
+        OCI_REF_NAME_ANNOTATION, OciImageIndex, TRUST_MANIFEST_ARTIFACT_TYPE,
+        attach_cosign_verification_artifacts, export_layout, import_layout, pack_catalog,
+        unpack_catalog,
     };
 
-    #[test]
-    fn packs_and_unpacks_canonical_fixture() {
-        let fixture = format!(
+    const INLINE: &str = r#"{
+        "specVersion": "1.0",
+        "entries": [{
+            "identifier": "urn:example:inline",
+            "type": "application/json",
+            "data": {"name": "inline"},
+            "trustManifest": {"identity": "urn:example:inline"}
+        }]
+    }"#;
+
+    fn spec_example() -> AiCatalog {
+        let path = format!(
             "{}/../../fixtures/spec-example.json",
             env!("CARGO_MANIFEST_DIR")
         );
-        let catalog = parse_file(&fixture).expect("fixture should parse");
 
-        let artifacts = pack_catalog(&catalog).expect("catalog should pack");
-        let unpacked = unpack_catalog(&artifacts).expect("artifacts should unpack");
-
-        assert_eq!(
-            artifacts.index.artifact_type.as_deref(),
-            Some(MEDIA_TYPE_CATALOG)
-        );
-        assert_eq!(artifacts.index.manifests.len(), catalog.entries.len());
-        assert_eq!(unpacked, catalog);
+        parse_file(&path).expect("fixture should parse")
     }
 
-    #[test]
-    fn packs_inline_entries_and_trust_manifests() {
-        let catalog = parse_str(
-            r#"{
-			  "specVersion": "1.0",
-			  "extensions": {
-				"com.example.scope": "test"
-			  },
-			  "entries": [
-				{
-				  "identifier": "urn:example:inline",
-				  "displayName": "Inline Entry",
-				  "type": "application/json",
-				  "data": {
-					"name": "inline"
-				  },
-				  "trustManifest": {
-					"identity": "urn:example:inline"
-				  }
-				}
-			  ]
-			}"#,
-        )
-        .expect("catalog should parse");
-
-        let artifacts = pack_catalog(&catalog).expect("catalog should pack");
-        let manifest_digest = artifacts.index.manifests[0].digest.clone();
-
-        assert_eq!(artifacts.referrers[&manifest_digest].len(), 1);
-        assert_eq!(
-            artifacts.referrers[&manifest_digest][0]
-                .artifact_type
-                .as_deref(),
-            Some(TRUST_MANIFEST_ARTIFACT_TYPE)
-        );
-
-        let unpacked = unpack_catalog(&artifacts).expect("artifacts should unpack");
-
-        assert_eq!(unpacked, catalog);
-    }
-
-    #[test]
-    fn rejects_entries_with_invalid_content_shape() {
-        let missing_payload = parse_str(
-            r#"{
-			  "specVersion": "1.0",
-			  "entries": [
-				{
-				  "identifier": "urn:example:missing",
-				  "displayName": "Missing",
-				  "type": "application/json"
-				}
-			  ]
-			}"#,
-        )
-        .expect("catalog should parse");
-
-        assert!(matches!(
-            pack_catalog(&missing_payload),
-            Err(Error::InvalidEntryContent(identifier)) if identifier == "urn:example:missing"
-        ));
-    }
-
-    #[test]
-    fn preserves_catalog_annotations() {
-        let catalog = parse_str(
-            &json!({
-                "specVersion": "1.0",
-                "host": {
-                    "displayName": "Example Host"
-                },
-                "extensions": {
-                    "com.example.scope": "demo"
-                },
-                "entries": [
-                    {
-                        "identifier": "urn:example:url",
-                        "displayName": "External Entry",
-                        "type": "application/json",
-                        "url": "https://example.com/entry.json"
-                    }
-                ]
-            })
-            .to_string(),
-        )
-        .expect("catalog should parse");
-
-        let artifacts = pack_catalog(&catalog).expect("catalog should pack");
-
-        assert_eq!(artifacts.index.annotations["ai-catalog.specVersion"], "1.0");
-        assert!(artifacts.index.annotations.contains_key("ai-catalog.host"));
-        assert!(
-            artifacts
-                .index
-                .annotations
-                .contains_key("ai-catalog.extensions")
-        );
-    }
-
-    #[test]
-    fn exports_standard_oci_layout() {
-        let fixture = format!(
-            "{}/../../fixtures/spec-example.json",
-            env!("CARGO_MANIFEST_DIR")
-        );
-        let catalog = parse_file(&fixture).expect("fixture should parse");
-        let artifacts = pack_catalog(&catalog).expect("catalog should pack");
-        let layout_dir = unique_temp_dir("ai-catalog-layout-export");
-
-        export_layout(&artifacts, &layout_dir, "v1").expect("layout export should succeed");
-
-        let metadata: serde_json::Value = serde_json::from_slice(
-            &fs::read(layout_dir.join("oci-layout")).expect("layout metadata should exist"),
-        )
-        .expect("layout metadata should be valid json");
-        let index: super::OciImageIndex = serde_json::from_slice(
-            &fs::read(layout_dir.join("index.json")).expect("layout index should exist"),
-        )
-        .expect("layout index should be valid json");
-
-        assert_eq!(metadata["imageLayoutVersion"], OCI_LAYOUT_VERSION);
-        assert_eq!(index.manifests.len(), 1 + catalog.entries.len());
-        let root_descriptor = index
-            .manifests
-            .iter()
-            .find(|descriptor| {
-                descriptor
-                    .annotations
-                    .get(OCI_REF_NAME_ANNOTATION)
-                    .map(String::as_str)
-                    == Some("v1")
-            })
-            .expect("root descriptor should be indexed");
-
-        assert_eq!(
-            root_descriptor
-                .annotations
-                .get(OCI_REF_NAME_ANNOTATION)
-                .map(String::as_str),
-            Some("v1")
-        );
-
-        let root_digest = root_descriptor
-            .digest
-            .strip_prefix("sha256:")
-            .expect("root descriptor should use sha256");
-        let root_index: super::OciImageIndex = serde_json::from_slice(
-            &fs::read(layout_dir.join("blobs/sha256").join(root_digest))
-                .expect("root index blob should exist"),
-        )
-        .expect("root index blob should parse");
-
-        assert_eq!(root_index.media_type, OCI_IMAGE_INDEX_MEDIA_TYPE);
-        assert_eq!(
-            root_index.artifact_type.as_deref(),
-            Some(MEDIA_TYPE_CATALOG)
-        );
-        assert_eq!(root_index.manifests.len(), catalog.entries.len());
-
-        fs::remove_dir_all(&layout_dir).expect("temp layout should be removed");
-    }
-
-    #[test]
-    fn exports_referrer_and_blob_content() {
-        let catalog = parse_str(
-            r#"{
-			  "specVersion": "1.0",
-			  "entries": [
-				{
-				  "identifier": "urn:example:inline",
-				  "displayName": "Inline Entry",
-				  "type": "application/json",
-				  "data": {
-					"name": "inline"
-				  },
-				  "trustManifest": {
-					"identity": "urn:example:inline"
-				  }
-				}
-			  ]
-			}"#,
-        )
-        .expect("catalog should parse");
-        let artifacts = pack_catalog(&catalog).expect("catalog should pack");
-        let manifest_digest = artifacts.index.manifests[0].digest.clone();
-        let referrer = &artifacts.referrers[&manifest_digest][0];
-        let referrer_bytes = serde_json::to_vec(referrer).expect("referrer should serialize");
-        let referrer_digest = descriptor_for_bytes(
-            &referrer_bytes,
-            OCI_IMAGE_MANIFEST_MEDIA_TYPE,
-            referrer.artifact_type.clone(),
-            referrer.annotations.clone(),
-        )
-        .digest;
-        let config_digest = artifacts.manifests[&manifest_digest].config.digest.clone();
-        let layout_dir = unique_temp_dir("ai-catalog-layout-referrer");
-
-        export_layout(&artifacts, &layout_dir, "latest").expect("layout export should succeed");
-        let layout_index: super::OciImageIndex = serde_json::from_slice(
-            &fs::read(layout_dir.join("index.json")).expect("layout index should exist"),
-        )
-        .expect("layout index should parse");
-
-        assert!(blob_path(&layout_dir, &referrer_digest).exists());
-        assert!(blob_path(&layout_dir, &config_digest).exists());
-        assert!(
-            layout_index
-                .manifests
-                .iter()
-                .any(|descriptor| descriptor.digest == referrer_digest
-                    && descriptor.artifact_type.as_deref() == Some(TRUST_MANIFEST_ARTIFACT_TYPE))
-        );
-        assert_eq!(
-            artifacts.manifests[&manifest_digest].config.media_type,
-            ENTRY_CONFIG_MEDIA_TYPE
-        );
-        assert_eq!(
-            referrer.artifact_type.as_deref(),
-            Some(TRUST_MANIFEST_ARTIFACT_TYPE)
-        );
-
-        fs::remove_dir_all(&layout_dir).expect("temp layout should be removed");
-    }
-
-    #[test]
-    fn rejects_non_empty_layout_directory() {
-        let fixture = format!(
-            "{}/../../fixtures/spec-example.json",
-            env!("CARGO_MANIFEST_DIR")
-        );
-        let catalog = parse_file(&fixture).expect("fixture should parse");
-        let artifacts = pack_catalog(&catalog).expect("catalog should pack");
-        let layout_dir = unique_temp_dir("ai-catalog-layout-non-empty");
-
-        fs::create_dir_all(&layout_dir).expect("layout dir should exist");
-        fs::write(layout_dir.join("stale.txt"), b"stale").expect("stale file should exist");
-
-        assert!(matches!(
-            export_layout(&artifacts, &layout_dir, "latest"),
-            Err(Error::NonEmptyLayoutDirectory(path)) if path == layout_dir.display().to_string()
-        ));
-
-        fs::remove_dir_all(&layout_dir).expect("temp layout should be removed");
-    }
-
-    #[test]
-    fn imports_exported_layout_round_trip() {
-        let fixture = format!(
-            "{}/../../fixtures/spec-example.json",
-            env!("CARGO_MANIFEST_DIR")
-        );
-        let catalog = parse_file(&fixture).expect("fixture should parse");
-        let artifacts = pack_catalog(&catalog).expect("catalog should pack");
-        let layout_dir = unique_temp_dir("ai-catalog-layout-import");
-
-        export_layout(&artifacts, &layout_dir, "latest").expect("layout export should succeed");
-
-        let imported = import_layout(&layout_dir, None).expect("layout import should succeed");
-        let unpacked = unpack_catalog(&imported).expect("imported layout should unpack");
-
-        assert_eq!(
-            imported.index.artifact_type.as_deref(),
-            Some(MEDIA_TYPE_CATALOG)
-        );
-        assert_eq!(unpacked, catalog);
-
-        fs::remove_dir_all(&layout_dir).expect("temp layout should be removed");
-    }
-
-    #[test]
-    fn imports_exported_layout_referrers() {
-        let catalog = parse_str(
-            r#"{
-			  "specVersion": "1.0",
-			  "entries": [
-				{
-				  "identifier": "urn:example:inline",
-				  "displayName": "Inline Entry",
-				  "type": "application/json",
-				  "data": {
-					"name": "inline"
-				  },
-				  "trustManifest": {
-					"identity": "urn:example:inline"
-				  }
-				}
-			  ]
-			}"#,
-        )
-        .expect("catalog should parse");
-        let artifacts = pack_catalog(&catalog).expect("catalog should pack");
-        let entry_digest = artifacts.index.manifests[0].digest.clone();
-        let layout_dir = unique_temp_dir("ai-catalog-layout-import-referrer");
-
-        export_layout(&artifacts, &layout_dir, "inline").expect("layout export should succeed");
-
-        let imported =
-            import_layout(&layout_dir, Some("inline")).expect("layout import should succeed");
-
-        assert_eq!(imported.referrers[&entry_digest].len(), 1);
-        assert_eq!(
-            imported.referrers[&entry_digest][0]
-                .artifact_type
-                .as_deref(),
-            Some(TRUST_MANIFEST_ARTIFACT_TYPE)
-        );
-
-        fs::remove_dir_all(&layout_dir).expect("temp layout should be removed");
-    }
-
-    #[test]
-    fn unpacks_catalog_with_additional_cosign_referrers() {
-        let catalog = parse_str(
-            r#"{
-			  "specVersion": "1.0",
-			  "entries": [
-				{
-				  "identifier": "urn:example:inline",
-				  "displayName": "Inline Entry",
-				  "type": "application/json",
-				  "data": {
-					"name": "inline"
-				  },
-				  "trustManifest": {
-					"identity": "urn:example:inline"
-				  }
-				}
-			  ]
-			}"#,
-        )
-        .expect("catalog should parse");
-        let mut artifacts = pack_catalog(&catalog).expect("catalog should pack");
-        let entry_digest = artifacts.index.manifests[0].digest.clone();
-
-        attach_cosign_verification_artifacts(
-            &mut artifacts,
-            &entry_digest,
-            "urn:example:inline",
-            "sha256:1234abcd",
-            b"cosign-signature",
-            b"-----BEGIN PUBLIC KEY-----\nZmFrZQ==\n-----END PUBLIC KEY-----\n",
-        )
-        .expect("cosign artifacts should attach");
-
-        let unpacked = unpack_catalog(&artifacts).expect("artifacts should still unpack");
-
-        assert_eq!(unpacked, catalog);
-        assert_eq!(artifacts.referrers[&entry_digest].len(), 3);
-    }
-
-    #[test]
-    fn exports_and_imports_cosign_referrers() {
-        let catalog = parse_str(
-            r#"{
-			  "specVersion": "1.0",
-			  "entries": [
-				{
-				  "identifier": "urn:example:inline",
-				  "displayName": "Inline Entry",
-				  "type": "application/json",
-				  "data": {
-					"name": "inline"
-				  },
-				  "trustManifest": {
-					"identity": "urn:example:inline"
-				  }
-				}
-			  ]
-			}"#,
-        )
-        .expect("catalog should parse");
-        let mut artifacts = pack_catalog(&catalog).expect("catalog should pack");
-        let entry_digest = artifacts.index.manifests[0].digest.clone();
-        let layout_dir = unique_temp_dir("ai-catalog-layout-cosign-referrers");
-
-        attach_cosign_verification_artifacts(
-            &mut artifacts,
-            &entry_digest,
-            "urn:example:inline",
-            "sha256:1234abcd",
-            b"cosign-signature",
-            b"-----BEGIN PUBLIC KEY-----\nZmFrZQ==\n-----END PUBLIC KEY-----\n",
-        )
-        .expect("cosign artifacts should attach");
-
-        export_layout(&artifacts, &layout_dir, "inline").expect("layout export should succeed");
-
-        let imported =
-            import_layout(&layout_dir, Some("inline")).expect("layout import should succeed");
-        let imported_types = imported.referrers[&entry_digest]
-            .iter()
-            .filter_map(|manifest| manifest.artifact_type.as_deref())
-            .collect::<Vec<_>>();
-
-        assert!(imported_types.contains(&TRUST_MANIFEST_ARTIFACT_TYPE));
-        assert!(imported_types.contains(&COSIGN_SIGNATURE_ARTIFACT_TYPE));
-        assert!(imported_types.contains(&COSIGN_PUBLIC_KEY_ARTIFACT_TYPE));
-
-        fs::remove_dir_all(&layout_dir).expect("temp layout should be removed");
-    }
-
-    #[test]
-    fn rejects_unknown_layout_reference() {
-        let fixture = format!(
-            "{}/../../fixtures/spec-example.json",
-            env!("CARGO_MANIFEST_DIR")
-        );
-        let catalog = parse_file(&fixture).expect("fixture should parse");
-        let artifacts = pack_catalog(&catalog).expect("catalog should pack");
-        let layout_dir = unique_temp_dir("ai-catalog-layout-missing-ref");
-
-        export_layout(&artifacts, &layout_dir, "latest").expect("layout export should succeed");
-
-        assert!(matches!(
-            import_layout(&layout_dir, Some("missing")),
-            Err(Error::MissingLayoutReference(reference)) if reference == "missing"
-        ));
-
-        fs::remove_dir_all(&layout_dir).expect("temp layout should be removed");
-    }
-
-    fn unique_temp_dir(prefix: &str) -> PathBuf {
+    fn temp_dir(prefix: &str) -> PathBuf {
         let unique = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("time should move forward")
@@ -1317,11 +894,118 @@ mod tests {
         std::env::temp_dir().join(format!("{prefix}-{unique}"))
     }
 
-    fn blob_path(layout_dir: &Path, digest: &str) -> PathBuf {
-        let encoded = digest
-            .strip_prefix("sha256:")
-            .expect("digest should use sha256");
+    #[test]
+    fn pack_and_unpack_round_trip() {
+        for catalog in [spec_example(), parse_str(INLINE).expect("inline parses")] {
+            let artifacts = pack_catalog(&catalog).expect("catalog should pack");
 
-        layout_dir.join("blobs/sha256").join(encoded)
+            assert_eq!(
+                artifacts.index.artifact_type.as_deref(),
+                Some(MEDIA_TYPE_CATALOG)
+            );
+            assert_eq!(artifacts.index.manifests.len(), catalog.entries.len());
+            assert_eq!(unpack_catalog(&artifacts).expect("unpacks"), catalog);
+        }
+    }
+
+    #[test]
+    fn trust_manifest_becomes_a_referrer() {
+        let artifacts = pack_catalog(&parse_str(INLINE).expect("parses")).expect("packs");
+        let entry = &artifacts.index.manifests[0].digest;
+
+        assert_eq!(
+            artifacts.referrers[entry]
+                .iter()
+                .map(|referrer| referrer.artifact_type.as_deref())
+                .collect::<Vec<_>>(),
+            [Some(TRUST_MANIFEST_ARTIFACT_TYPE)]
+        );
+    }
+
+    #[test]
+    fn rejects_entry_without_content() {
+        let catalog = parse_str(
+            r#"{"specVersion":"1.0","entries":[{"identifier":"urn:example:empty","type":"application/json"}]}"#,
+        )
+        .expect("parses");
+
+        assert!(matches!(
+            pack_catalog(&catalog),
+            Err(Error::InvalidEntryContent(identifier)) if identifier == "urn:example:empty"
+        ));
+    }
+
+    #[test]
+    fn layout_round_trip_keeps_referrers() {
+        let catalog = parse_str(INLINE).expect("parses");
+        let mut artifacts = pack_catalog(&catalog).expect("packs");
+        let entry = artifacts.index.manifests[0].digest.clone();
+        let dir = temp_dir("ai-catalog-layout");
+
+        attach_cosign_verification_artifacts(
+            &mut artifacts,
+            &entry,
+            "urn:example:inline",
+            "sha256:1234abcd",
+            b"cosign-signature",
+            b"-----BEGIN PUBLIC KEY-----\nZmFrZQ==\n-----END PUBLIC KEY-----\n",
+        )
+        .expect("cosign artifacts attach");
+        export_layout(&artifacts, &dir, "inline").expect("exports");
+
+        let index: OciImageIndex =
+            serde_json::from_slice(&fs::read(dir.join("index.json")).expect("index exists"))
+                .expect("index parses");
+
+        assert!(index.manifests.iter().any(|descriptor| {
+            descriptor
+                .annotations
+                .get(OCI_REF_NAME_ANNOTATION)
+                .is_some_and(|name| name == "inline")
+        }));
+
+        let imported = import_layout(&dir, Some("inline")).expect("imports");
+        let mut types: Vec<_> = imported.referrers[&entry]
+            .iter()
+            .filter_map(|referrer| referrer.artifact_type.as_deref())
+            .collect();
+        types.sort_unstable();
+
+        let mut want = [
+            TRUST_MANIFEST_ARTIFACT_TYPE,
+            COSIGN_SIGNATURE_ARTIFACT_TYPE,
+            COSIGN_PUBLIC_KEY_ARTIFACT_TYPE,
+        ];
+        want.sort_unstable();
+
+        assert_eq!(types, want);
+        assert_eq!(unpack_catalog(&imported).expect("unpacks"), catalog);
+
+        fs::remove_dir_all(&dir).expect("temp layout removed");
+    }
+
+    #[test]
+    fn layout_rejects_bad_input() {
+        let artifacts = pack_catalog(&spec_example()).expect("packs");
+        let dir = temp_dir("ai-catalog-layout-bad");
+
+        fs::create_dir_all(&dir).expect("dir created");
+        fs::write(dir.join("stale.txt"), b"stale").expect("stale file written");
+
+        assert!(matches!(
+            export_layout(&artifacts, &dir, "latest"),
+            Err(Error::NonEmptyLayoutDirectory(path)) if path == dir.display().to_string()
+        ));
+
+        fs::remove_dir_all(&dir).expect("temp dir removed");
+
+        export_layout(&artifacts, &dir, "latest").expect("exports");
+
+        assert!(matches!(
+            import_layout(&dir, Some("missing")),
+            Err(Error::MissingLayoutReference(reference)) if reference == "missing"
+        ));
+
+        fs::remove_dir_all(&dir).expect("temp layout removed");
     }
 }

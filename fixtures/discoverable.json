@@ -1,0 +1,14 @@
+{
+  "specVersion": "1.0",
+  "host": {
+    "displayName": "Example Host"
+  },
+  "entries": [
+    {
+      "identifier": "urn:example:agent",
+      "displayName": "Agent",
+      "type": "application/json",
+      "url": "https://example.com/agent.json"
+    }
+  ]
+}

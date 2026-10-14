@@ -1,0 +1,28 @@
+{
+  "specVersion": "1.0",
+  "host": {
+    "displayName": "Example Host",
+    "identifier": "did:web:example.com"
+  },
+  "entries": [
+    {
+      "identifier": "urn:example:artifact",
+      "displayName": "Artifact",
+      "type": "application/json",
+      "url": "https://example.com/artifact.json",
+      "trustManifest": {
+        "identity": "urn:example:artifact",
+        "trustSchema": {
+          "identifier": "urn:trust:example",
+          "version": "1.0"
+        },
+        "provenance": [
+          {
+            "relation": "publishedFrom",
+            "sourceId": "https://github.com/example/repo"
+          }
+        ]
+      }
+    }
+  ]
+}
