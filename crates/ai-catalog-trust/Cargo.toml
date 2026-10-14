@@ -4,8 +4,8 @@
 
 [package]
 name = "ai-catalog-trust"
-description = "Trust manifest analysis, digest verification, and canonicalization for AI Catalog documents"
-keywords = ["ai", "catalog", "trust", "attestation", "provenance"]
+description = "Digest verification and JCS canonicalization for AI Catalog documents"
+keywords = ["ai", "catalog", "trust", "digest", "jcs"]
 categories = ["cryptography"]
 readme = "README.md"
 version.workspace = true
@@ -16,10 +16,8 @@ rust-version.workspace = true
 
 [dependencies]
 ai-catalog.workspace = true
-base64.workspace = true
 serde.workspace = true
 serde_jcs.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 thiserror.workspace = true
-time.workspace = true

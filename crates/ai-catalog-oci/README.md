@@ -13,8 +13,8 @@ convenience for distributing catalogs over existing registry infrastructure.
 
 ```rust
 let catalog = ai_catalog::parse_file("ai-catalog.json")?;
-let artifacts = ai_catalog_oci::pack(&catalog)?;
-let restored = ai_catalog_oci::unpack(&artifacts)?;
+let artifacts = ai_catalog_oci::pack_catalog(&catalog)?;
+let restored = ai_catalog_oci::unpack_catalog(&artifacts)?;
 ```
 
 ## License

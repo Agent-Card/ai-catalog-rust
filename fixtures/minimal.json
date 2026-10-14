@@ -1,0 +1,11 @@
+{
+  "specVersion": "1.0",
+  "entries": [
+    {
+      "identifier": "urn:example:minimal",
+      "displayName": "Minimal",
+      "type": "application/json",
+      "url": "https://example.com/minimal.json"
+    }
+  ]
+}

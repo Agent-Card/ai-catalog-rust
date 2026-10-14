@@ -1,0 +1,170 @@
+{
+  "specVersion": "1.0",
+  "host": {
+    "identifier": "did:web:example.com"
+  },
+  "extensions": {
+    "": true
+  },
+  "signature": "not-a-detached-jws",
+  "entries": [
+    {
+      "identifier": "urn:both",
+      "displayName": "Both",
+      "type": "application/json",
+      "url": "https://example.com/both.json",
+      "data": {
+        "key": "value"
+      }
+    },
+    {
+      "identifier": "urn:none",
+      "displayName": "None",
+      "type": "application/json"
+    },
+    {
+      "identifier": "urn:dup",
+      "type": "application/octet-stream",
+      "url": "https://example.com/dup-old",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "identifier": "urn:dup",
+      "type": "application/octet-stream",
+      "url": "https://example.com/dup-new",
+      "updatedAt": "2026-05-01T00:00:00Z"
+    },
+    {
+      "identifier": "urn:ver",
+      "displayName": "Ver1",
+      "type": "application/json",
+      "url": "https://example.com/ver1.json",
+      "version": "1.0.0"
+    },
+    {
+      "identifier": "urn:ver",
+      "displayName": "Ver2",
+      "type": "application/json",
+      "url": "https://example.com/ver2.json",
+      "version": "1.0.0"
+    },
+    {
+      "identifier": "urn:mix",
+      "displayName": "Unversioned",
+      "type": "application/json",
+      "url": "https://example.com/mix-u.json"
+    },
+    {
+      "identifier": "urn:mix",
+      "displayName": "Versioned",
+      "type": "application/json",
+      "url": "https://example.com/mix-v.json",
+      "version": "1.0.0"
+    },
+    {
+      "identifier": "urn:air:acme.com:agent:mis",
+      "displayName": "Misaligned",
+      "type": "application/json",
+      "url": "https://example.com/mis.json",
+      "trustManifest": {
+        "identity": "did:web:evil.example"
+      }
+    },
+    {
+      "url": "https://example.com/incomplete.json",
+      "publisher": {
+        "identityType": "did"
+      },
+      "trustManifest": {
+        "identityType": "did"
+      }
+    },
+    {
+      "identifier": "plain-identifier",
+      "displayName": "Plain",
+      "type": "application/json",
+      "url": "https://example.com/plain.json",
+      "updatedAt": "yesterday"
+    },
+    {
+      "identifier": "urn:ext",
+      "displayName": "Extensions",
+      "type": "application/json",
+      "url": "https://example.com/ext.json",
+      "extensions": {
+        "not a namespace": 1
+      },
+      "trustManifest": {
+        "identity": "urn:ext",
+        "extensions": {
+          "nodots": "bad"
+        },
+        "trustSchema": {
+          "identifier": "urn:trust:example",
+          "version": "1.0"
+        }
+      }
+    },
+    {
+      "identifier": "urn:hollow",
+      "displayName": "Hollow",
+      "type": "application/json",
+      "url": "https://example.com/hollow.json",
+      "trustManifest": {
+        "identity": "urn:hollow",
+        "privacyPolicyUrl": "https://example.com/privacy"
+      }
+    },
+    {
+      "identifier": "urn:unbound-signature",
+      "displayName": "Unbound Signature",
+      "type": "application/json",
+      "url": "https://example.com/unbound.json",
+      "trustManifest": {
+        "identity": "urn:unbound-signature",
+        "signature": "eyJhbGciOiJFUzI1NiJ9..c2lnbmF0dXJlLXBsYWNlaG9sZGVy"
+      }
+    },
+    {
+      "identifier": "urn:stale",
+      "displayName": "Stale",
+      "type": "application/json",
+      "url": "https://example.com/stale.json",
+      "trustManifest": {
+        "identity": "urn:stale",
+        "trustSchema": {
+          "identifier": "urn:trust:example",
+          "version": "1.0"
+        },
+        "issuedAt": "not-a-timestamp",
+        "expiresAt": "2020-01-01T00:00:00Z"
+      }
+    },
+    {
+      "identifier": "urn:mismatched-subject",
+      "displayName": "Mismatched Subject",
+      "type": "application/json",
+      "url": "https://example.com/subject.json",
+      "trustManifest": {
+        "identity": "urn:mismatched-subject",
+        "subject": {
+          "identifier": "urn:other",
+          "version": "9.9.9",
+          "type": "application/gguf",
+          "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+          "url": "https://example.com/other.json"
+        },
+        "issuedAt": "2026-03-15T10:00:00Z",
+        "signature": "eyJhbGciOiJFUzI1NiJ9..c2lnbmF0dXJlLXBsYWNlaG9sZGVy"
+      }
+    },
+    {
+      "identifier": "urn:nest",
+      "displayName": "Nest",
+      "type": "application/ai-catalog+json",
+      "data": {
+        "specVersion": 12345
+      }
+    }
+  ]
+}

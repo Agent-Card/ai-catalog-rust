@@ -88,8 +88,6 @@ pub struct HostInfo {
     pub documentation_url: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub logo_url: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub trust_manifest: Option<TrustManifest>,
     #[serde(flatten, default)]
     pub extra_fields: BTreeMap<String, Value>,
 }
@@ -223,6 +221,10 @@ impl TrustManifest {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Subject {
+    #[serde(default)]
+    pub identifier: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
     #[serde(default)]
     pub r#type: String,
     #[serde(default)]
