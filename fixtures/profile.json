@@ -1,0 +1,297 @@
+{
+  "specVersion": "1.0",
+  "host": {
+    "displayName": "Acme"
+  },
+  "entries": [
+    {
+      "identifier": "urn:air:acme.com:agent:ok",
+      "displayName": "ok",
+      "type": "application/json",
+      "url": "https://example.com/ok.json",
+      "trustManifest": {
+        "identity": "did:web:acme.com",
+        "subject": {
+          "identifier": "urn:air:acme.com:agent:ok",
+          "type": "application/json",
+          "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+          "url": "https://example.com/ok.json"
+        },
+        "issuedAt": "2026-03-15T10:00:00Z",
+        "expiresAt": "2126-03-15T10:00:00Z",
+        "signature": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImRpZDp3ZWI6YWNtZS5jb20ja2V5LTEifQ..c2lnbmF0dXJlLXBsYWNlaG9sZGVy"
+      }
+    },
+    {
+      "identifier": "urn:example:agent:not-urn-air",
+      "displayName": "not-urn-air",
+      "type": "application/json",
+      "url": "https://example.com/not-urn-air.json",
+      "trustManifest": {
+        "identity": "did:web:example.com",
+        "subject": {
+          "identifier": "urn:example:agent:not-urn-air",
+          "type": "application/json",
+          "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+          "url": "https://example.com/not-urn-air.json"
+        },
+        "issuedAt": "2026-03-15T10:00:00Z",
+        "expiresAt": "2126-03-15T10:00:00Z",
+        "signature": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImRpZDp3ZWI6ZXhhbXBsZS5jb20ja2V5LTEifQ..c2lnbmF0dXJlLXBsYWNlaG9sZGVy"
+      }
+    },
+    {
+      "identifier": "urn:air:acme.com:agent:wrong-identity",
+      "displayName": "wrong-identity",
+      "type": "application/json",
+      "url": "https://example.com/wrong-identity.json",
+      "trustManifest": {
+        "identity": "did:web:evil.example",
+        "subject": {
+          "identifier": "urn:air:acme.com:agent:wrong-identity",
+          "type": "application/json",
+          "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+          "url": "https://example.com/wrong-identity.json"
+        },
+        "issuedAt": "2026-03-15T10:00:00Z",
+        "expiresAt": "2126-03-15T10:00:00Z",
+        "signature": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImRpZDp3ZWI6ZXZpbC5leGFtcGxlI2tleS0xIn0..c2lnbmF0dXJlLXBsYWNlaG9sZGVy"
+      }
+    },
+    {
+      "identifier": "urn:air:acme.com:agent:path-identity",
+      "displayName": "path-identity",
+      "type": "application/json",
+      "url": "https://example.com/path-identity.json",
+      "trustManifest": {
+        "identity": "did:web:acme.com:agents",
+        "subject": {
+          "identifier": "urn:air:acme.com:agent:path-identity",
+          "type": "application/json",
+          "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+          "url": "https://example.com/path-identity.json"
+        },
+        "issuedAt": "2026-03-15T10:00:00Z",
+        "expiresAt": "2126-03-15T10:00:00Z",
+        "signature": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImRpZDp3ZWI6YWNtZS5jb206YWdlbnRzI2tleS0xIn0..c2lnbmF0dXJlLXBsYWNlaG9sZGVy"
+      }
+    },
+    {
+      "identifier": "urn:air:acme.com:agent:identity-type",
+      "displayName": "identity-type",
+      "type": "application/json",
+      "url": "https://example.com/identity-type.json",
+      "trustManifest": {
+        "identity": "did:web:acme.com",
+        "subject": {
+          "identifier": "urn:air:acme.com:agent:identity-type",
+          "type": "application/json",
+          "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+          "url": "https://example.com/identity-type.json"
+        },
+        "issuedAt": "2026-03-15T10:00:00Z",
+        "expiresAt": "2126-03-15T10:00:00Z",
+        "signature": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImRpZDp3ZWI6YWNtZS5jb20ja2V5LTEifQ..c2lnbmF0dXJlLXBsYWNlaG9sZGVy",
+        "identityType": "x509"
+      }
+    },
+    {
+      "identifier": "urn:air:acme.com:agent:es384",
+      "displayName": "es384",
+      "type": "application/json",
+      "url": "https://example.com/es384.json",
+      "trustManifest": {
+        "identity": "did:web:acme.com",
+        "subject": {
+          "identifier": "urn:air:acme.com:agent:es384",
+          "type": "application/json",
+          "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+          "url": "https://example.com/es384.json"
+        },
+        "issuedAt": "2026-03-15T10:00:00Z",
+        "expiresAt": "2126-03-15T10:00:00Z",
+        "signature": "eyJhbGciOiJFUzM4NCIsImtpZCI6ImRpZDp3ZWI6YWNtZS5jb20ja2V5LTEifQ..c2lnbmF0dXJlLXBsYWNlaG9sZGVy"
+      }
+    },
+    {
+      "identifier": "urn:air:acme.com:agent:no-kid",
+      "displayName": "no-kid",
+      "type": "application/json",
+      "url": "https://example.com/no-kid.json",
+      "trustManifest": {
+        "identity": "did:web:acme.com",
+        "subject": {
+          "identifier": "urn:air:acme.com:agent:no-kid",
+          "type": "application/json",
+          "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+          "url": "https://example.com/no-kid.json"
+        },
+        "issuedAt": "2026-03-15T10:00:00Z",
+        "expiresAt": "2126-03-15T10:00:00Z",
+        "signature": "eyJhbGciOiJFUzI1NiJ9..c2lnbmF0dXJlLXBsYWNlaG9sZGVy"
+      }
+    },
+    {
+      "identifier": "urn:air:acme.com:agent:foreign-kid",
+      "displayName": "foreign-kid",
+      "type": "application/json",
+      "url": "https://example.com/foreign-kid.json",
+      "trustManifest": {
+        "identity": "did:web:acme.com",
+        "subject": {
+          "identifier": "urn:air:acme.com:agent:foreign-kid",
+          "type": "application/json",
+          "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+          "url": "https://example.com/foreign-kid.json"
+        },
+        "issuedAt": "2026-03-15T10:00:00Z",
+        "expiresAt": "2126-03-15T10:00:00Z",
+        "signature": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImRpZDp3ZWI6b3RoZXIuZXhhbXBsZSNrZXktMSJ9..c2lnbmF0dXJlLXBsYWNlaG9sZGVy"
+      }
+    },
+    {
+      "identifier": "urn:air:acme.com:agent:empty-fragment",
+      "displayName": "empty-fragment",
+      "type": "application/json",
+      "url": "https://example.com/empty-fragment.json",
+      "trustManifest": {
+        "identity": "did:web:acme.com",
+        "subject": {
+          "identifier": "urn:air:acme.com:agent:empty-fragment",
+          "type": "application/json",
+          "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+          "url": "https://example.com/empty-fragment.json"
+        },
+        "issuedAt": "2026-03-15T10:00:00Z",
+        "expiresAt": "2126-03-15T10:00:00Z",
+        "signature": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImRpZDp3ZWI6YWNtZS5jb20jIn0..c2lnbmF0dXJlLXBsYWNlaG9sZGVy"
+      }
+    },
+    {
+      "identifier": "urn:air:acme.com:agent:inline-key",
+      "displayName": "inline-key",
+      "type": "application/json",
+      "url": "https://example.com/inline-key.json",
+      "trustManifest": {
+        "identity": "did:web:acme.com",
+        "subject": {
+          "identifier": "urn:air:acme.com:agent:inline-key",
+          "type": "application/json",
+          "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+          "url": "https://example.com/inline-key.json"
+        },
+        "issuedAt": "2026-03-15T10:00:00Z",
+        "expiresAt": "2126-03-15T10:00:00Z",
+        "signature": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImRpZDp3ZWI6YWNtZS5jb20ja2V5LTEiLCJqd2siOnsia3R5IjoiRUMifX0..c2lnbmF0dXJlLXBsYWNlaG9sZGVy"
+      }
+    },
+    {
+      "identifier": "urn:air:Acme.com:agent:uppercase",
+      "displayName": "uppercase",
+      "type": "application/json",
+      "url": "https://example.com/uppercase.json",
+      "trustManifest": {
+        "identity": "did:web:Acme.com",
+        "subject": {
+          "identifier": "urn:air:Acme.com:agent:uppercase",
+          "type": "application/json",
+          "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+          "url": "https://example.com/uppercase.json"
+        },
+        "issuedAt": "2026-03-15T10:00:00Z",
+        "expiresAt": "2126-03-15T10:00:00Z",
+        "signature": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImRpZDp3ZWI6QWNtZS5jb20ja2V5LTEifQ..c2lnbmF0dXJlLXBsYWNlaG9sZGVy"
+      }
+    },
+    {
+      "identifier": "urn:air:acme.com:agent:b64",
+      "displayName": "b64",
+      "type": "application/json",
+      "url": "https://example.com/b64.json",
+      "trustManifest": {
+        "identity": "did:web:acme.com",
+        "subject": {
+          "identifier": "urn:air:acme.com:agent:b64",
+          "type": "application/json",
+          "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+          "url": "https://example.com/b64.json"
+        },
+        "issuedAt": "2026-03-15T10:00:00Z",
+        "expiresAt": "2126-03-15T10:00:00Z",
+        "signature": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImRpZDp3ZWI6YWNtZS5jb20ja2V5LTEiLCJiNjQiOmZhbHNlfQ..c2lnbmF0dXJlLXBsYWNlaG9sZGVy"
+      }
+    },
+    {
+      "identifier": "urn:air:acme.com:agent:repeated-member",
+      "displayName": "repeated-member",
+      "type": "application/json",
+      "url": "https://example.com/repeated-member.json",
+      "trustManifest": {
+        "identity": "did:web:acme.com",
+        "subject": {
+          "identifier": "urn:air:acme.com:agent:repeated-member",
+          "type": "application/json",
+          "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+          "url": "https://example.com/repeated-member.json"
+        },
+        "issuedAt": "2026-03-15T10:00:00Z",
+        "expiresAt": "2126-03-15T10:00:00Z",
+        "signature": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImRpZDp3ZWI6YWNtZS5jb20ja2V5LTEiLCJhbGciOiJFUzI1NiJ9..c2lnbmF0dXJlLXBsYWNlaG9sZGVy"
+      }
+    },
+    {
+      "identifier": "urn:air:acme.com:agent:attached-payload",
+      "displayName": "attached-payload",
+      "type": "application/json",
+      "url": "https://example.com/attached-payload.json",
+      "trustManifest": {
+        "identity": "did:web:acme.com",
+        "subject": {
+          "identifier": "urn:air:acme.com:agent:attached-payload",
+          "type": "application/json",
+          "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+          "url": "https://example.com/attached-payload.json"
+        },
+        "issuedAt": "2026-03-15T10:00:00Z",
+        "expiresAt": "2126-03-15T10:00:00Z",
+        "signature": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImRpZDp3ZWI6YWNtZS5jb20ja2V5LTEifQ.cGF5bG9hZA.c2lnbmF0dXJlLXBsYWNlaG9sZGVy"
+      }
+    },
+    {
+      "identifier": "URN:AIR:acme.com:agent:uppercase-prefix",
+      "displayName": "uppercase-prefix",
+      "type": "application/json",
+      "url": "https://example.com/ok.json",
+      "trustManifest": {
+        "identity": "did:web:acme.com",
+        "subject": {
+          "identifier": "URN:AIR:acme.com:agent:uppercase-prefix",
+          "type": "application/json",
+          "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+          "url": "https://example.com/ok.json"
+        },
+        "issuedAt": "2026-03-15T10:00:00Z",
+        "expiresAt": "2126-03-15T10:00:00Z",
+        "signature": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImRpZDp3ZWI6YWNtZS5jb20ja2V5LTEifQ..c2lnbmF0dXJlLXBsYWNlaG9sZGVy"
+      }
+    },
+    {
+      "identifier": "urn:air:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com:agent:long-label",
+      "displayName": "long-label",
+      "type": "application/json",
+      "url": "https://example.com/ok.json",
+      "trustManifest": {
+        "identity": "did:web:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com",
+        "subject": {
+          "identifier": "urn:air:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com:agent:long-label",
+          "type": "application/json",
+          "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+          "url": "https://example.com/ok.json"
+        },
+        "issuedAt": "2026-03-15T10:00:00Z",
+        "expiresAt": "2126-03-15T10:00:00Z",
+        "signature": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImRpZDp3ZWI6YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYS5jb20ja2V5LTEifQ..c2lnbmF0dXJlLXBsYWNlaG9sZGVy"
+      }
+    }
+  ]
+}

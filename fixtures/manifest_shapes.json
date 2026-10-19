@@ -1,0 +1,60 @@
+{
+  "empty attestations": {
+    "identity": "urn:example:a",
+    "attestations": []
+  },
+  "empty provenance": {
+    "identity": "urn:example:a",
+    "provenance": []
+  },
+  "empty extensions": {
+    "identity": "urn:example:a",
+    "extensions": {}
+  },
+  "empty string member": {
+    "identity": "urn:example:a",
+    "identityType": ""
+  },
+  "null member": {
+    "identity": "urn:example:a",
+    "privacyPolicyUrl": null
+  },
+  "unknown member": {
+    "identity": "urn:example:a",
+    "com.example.extra": {
+      "a": 1
+    }
+  },
+  "unknown nested member": {
+    "identity": "urn:example:a",
+    "attestations": [
+      {
+        "type": "t",
+        "uri": "https://example.com/a",
+        "x": true
+      }
+    ]
+  },
+  "empty nested array": {
+    "identity": "urn:example:a",
+    "trustSchema": {
+      "identifier": "i",
+      "version": "1",
+      "verificationMethods": []
+    }
+  },
+  "whitespace and member order": {
+    "signature": "ZXlK..",
+    "subject": {
+      "url": "https://example.com/a",
+      "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+      "type": "text/plain"
+    },
+    "identity": "urn:example:a"
+  },
+  "signed with unmodelled member": {
+    "signature": "sig",
+    "identity": "urn:example",
+    "futureMember": 42
+  }
+}

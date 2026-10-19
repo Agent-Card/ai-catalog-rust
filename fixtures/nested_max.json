@@ -1,0 +1,51 @@
+{
+  "specVersion": "1.0",
+  "entries": [
+    {
+      "identifier": "urn:example:nested",
+      "displayName": "Nested",
+      "type": "application/ai-catalog+json",
+      "data": {
+        "specVersion": "1.0",
+        "entries": [
+          {
+            "identifier": "urn:example:nested",
+            "displayName": "Nested",
+            "type": "application/ai-catalog+json",
+            "data": {
+              "specVersion": "1.0",
+              "entries": [
+                {
+                  "identifier": "urn:example:nested",
+                  "displayName": "Nested",
+                  "type": "application/ai-catalog+json",
+                  "data": {
+                    "specVersion": "1.0",
+                    "entries": [
+                      {
+                        "identifier": "urn:example:nested",
+                        "displayName": "Nested",
+                        "type": "application/ai-catalog+json",
+                        "data": {
+                          "specVersion": "1.0",
+                          "entries": [
+                            {
+                              "identifier": "urn:example:leaf",
+                              "displayName": "Leaf",
+                              "type": "application/json",
+                              "url": "https://example.com/leaf.json"
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

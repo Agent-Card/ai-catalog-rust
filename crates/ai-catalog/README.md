@@ -23,7 +23,7 @@ let entry = catalog.get_by_id("urn:air:example.com:agent:finance");
 | Crate | Purpose |
 |---|---|
 | [`ai-catalog-validate`](https://crates.io/crates/ai-catalog-validate) | Semantic validation and conformance levels |
-| [`ai-catalog-trust`](https://crates.io/crates/ai-catalog-trust) | Trust manifest analysis and digest verification |
+| [`ai-catalog-trust`](https://crates.io/crates/ai-catalog-trust) | Digest verification and canonicalization |
 | [`ai-catalog-oci`](https://crates.io/crates/ai-catalog-oci) | OCI artifact packaging |
 
 ## License

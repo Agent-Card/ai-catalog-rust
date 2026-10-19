@@ -1,0 +1,130 @@
+{
+  "specVersion": "1.0",
+  "host": {
+    "displayName": "Acme Corp",
+    "identifier": "did:example:org-acme-corp",
+    "documentationUrl": "https://example.com/docs"
+  },
+  "extensions": {
+    "com.example.category": "demo",
+    "https://example.com/extensions/demo": {
+      "enabled": true
+    }
+  },
+  "entries": [
+    {
+      "identifier": "urn:example:agent:finance-v1",
+      "displayName": "Finance Agent",
+      "type": "application/a2a-agent-card+json",
+      "description": "Handles financial queries",
+      "tags": [
+        "finance",
+        "banking"
+      ],
+      "url": "https://example.com/finance.json",
+      "publisher": {
+        "identifier": "did:example:acme",
+        "displayName": "Acme"
+      }
+    },
+    {
+      "identifier": "urn:example:data:nlp-corpus",
+      "displayName": "NLP Corpus",
+      "type": "application/octet-stream",
+      "description": "Large language model training data",
+      "tags": [
+        "nlp",
+        "dataset"
+      ],
+      "url": "https://example.com/nlp.bin",
+      "publisher": {
+        "identifier": "did:example:acme",
+        "displayName": "Acme"
+      }
+    },
+    {
+      "identifier": "urn:example:model:embedding-v2",
+      "type": "application/gguf",
+      "url": "https://example.com/embed.gguf",
+      "publisher": {
+        "identifier": "did:example:other",
+        "displayName": "Other"
+      }
+    },
+    {
+      "identifier": "urn:example:mcp:weather",
+      "displayName": "Weather",
+      "type": "application/mcp-server-card+json",
+      "url": "https://example.com/weather.json"
+    },
+    {
+      "identifier": "urn:air:acme.com:agent:finance",
+      "version": "2.0.0",
+      "type": "application/a2a-agent-card+json",
+      "url": "https://example.com/finance/2.0.0.json",
+      "updatedAt": "2026-01-20T08:00:00Z"
+    },
+    {
+      "identifier": "urn:air:acme.com:agent:finance",
+      "version": "2.1.0",
+      "type": "application/a2a-agent-card+json",
+      "url": "https://example.com/finance/2.1.0.json",
+      "updatedAt": "2026-03-15T10:00:00Z"
+    },
+    {
+      "identifier": "urn:air:acme.com:agent:finance",
+      "version": "2.0.1",
+      "type": "application/a2a-agent-card+json",
+      "url": "https://example.com/finance/2.0.1.json",
+      "updatedAt": "2026-02-01T08:00:00Z"
+    },
+    {
+      "identifier": "urn:example:model:tagged",
+      "version": "1.0.0",
+      "type": "application/octet-stream",
+      "url": "https://example.com/tagged/semver.bin",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "identifier": "urn:example:model:tagged",
+      "version": "latest",
+      "type": "application/octet-stream",
+      "url": "https://example.com/tagged/latest.bin",
+      "updatedAt": "2026-09-01T00:00:00Z"
+    },
+    {
+      "identifier": "urn:air:acme.com:mcp:trusted",
+      "displayName": "Trusted Service",
+      "type": "application/mcp-server-card+json",
+      "url": "https://example.com/trusted.json",
+      "trustManifest": {
+        "identity": "did:web:acme.com",
+        "subject": {
+          "identifier": "urn:air:acme.com:mcp:trusted",
+          "type": "application/mcp-server-card+json",
+          "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+          "url": "https://example.com/trusted.json"
+        },
+        "issuedAt": "2026-03-15T10:00:00Z",
+        "expiresAt": "2126-03-15T10:00:00Z",
+        "signature": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImRpZDp3ZWI6YWNtZS5jb20ja2V5LTEifQ..c2lnbmF0dXJlLXBsYWNlaG9sZGVy"
+      }
+    },
+    {
+      "identifier": "urn:example:catalog:child",
+      "displayName": "Child Catalog",
+      "type": "application/ai-catalog+json",
+      "data": {
+        "specVersion": "1.0",
+        "entries": [
+          {
+            "identifier": "urn:example:child:leaf",
+            "displayName": "Leaf",
+            "type": "application/json",
+            "url": "https://example.com/leaf.json"
+          }
+        ]
+      }
+    }
+  ]
+}

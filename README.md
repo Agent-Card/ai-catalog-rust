@@ -16,7 +16,7 @@ Rust libraries for the [AI Catalog specification](https://ai-catalog.io/).
 |---|---|
 | [`crates/ai-catalog`](crates/ai-catalog/README.md) | Core types (`AiCatalog`, `CatalogEntry`, `HostInfo`, `Publisher`, `TrustManifest`), parse and serialize helpers |
 | [`crates/ai-catalog-validate`](crates/ai-catalog-validate/README.md) | Semantic validation and conformance detection |
-| [`crates/ai-catalog-trust`](crates/ai-catalog-trust/README.md) | Trust manifest analysis, digest verification, and canonicalization |
+| [`crates/ai-catalog-trust`](crates/ai-catalog-trust/README.md) | Digest verification and canonicalization |
 | [`crates/ai-catalog-oci`](crates/ai-catalog-oci/README.md) | OCI artifact-set pack/unpack and standard OCI image layout import/export |
 
 `ai-catalog`, `ai-catalog-validate`, and `ai-catalog-trust` implement the
@@ -33,7 +33,7 @@ these crates from crates.io.
 |---|---|
 | **Minimal** | `specVersion`, and every entry carrying `identifier`, `type`, and exactly one of `url` or `data` |
 | **Discoverable** | Minimal + a `host` object identifying the catalog operator |
-| **Trusted** | Discoverable + every `trustManifest` in the document signed, with a `subject` and `issuedAt` |
+| **Trusted** | Discoverable + every root entry `trustManifest` signed, bound to its entry, unexpired and conforming to the did:web Publisher Profile |
 
 ## Usage
 
@@ -56,28 +56,21 @@ for entry in catalog.search("finance") {
 let entry = catalog.get_by_id("urn:air:example.com:agent:finance");
 ```
 
-Validate a document and report its conformance level:
+Validate a document and report its conformance level. Signatures are not
+cryptographically verified:
 
 ```rust
 let result = ai_catalog_validate::validate(&catalog);
 
-if !result.is_valid {
-    for diagnostic in &result.errors {
-        eprintln!("{}: {}", diagnostic.path, diagnostic.message);
-    }
+for diagnostic in &result.errors {
+    eprintln!("{} {}: {}", diagnostic.code, diagnostic.path, diagnostic.message);
 }
 ```
 
-Inspect trust manifests. This reports findings such as malformed signatures,
-weak digests, and identities whose domain does not align with the entry's
-publisher domain. It does not perform cryptographic signature verification:
+Verify an attestation digest against its bytes:
 
 ```rust
-let report = ai_catalog_trust::analyze_catalog(&catalog);
-
-for finding in &report.findings {
-    println!("{:?} {}: {}", finding.severity, finding.path, finding.message);
-}
+let matches = ai_catalog_trust::verify_digest("sha256:9f86d081...", bytes)?;
 ```
 
 Each crate's README covers its API in more detail.
