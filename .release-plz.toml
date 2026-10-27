@@ -29,3 +29,9 @@ name = "ai-catalog-oci"
 publish = true
 release = true
 changelog_update = true
+
+[[package]]
+name = "ai-catalog-discover"
+publish = true
+release = true
+changelog_update = true
