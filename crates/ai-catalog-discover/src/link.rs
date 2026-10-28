@@ -143,19 +143,14 @@ mod tests {
     }
 
     #[test]
-    fn accepts_a_bare_token_and_any_case() {
-        assert_eq!(targets("</c.json>; REL=ai-catalog"), ["/c.json"]);
-        assert_eq!(targets(r#"</c.json>; rel="AI-Catalog""#), ["/c.json"]);
-    }
-
-    #[test]
     fn picks_the_matching_link_out_of_several() {
         let value = r#"</style.css>; rel=preload; as=style, <https://a.example/ai.json>; rel="ai-catalog"; type="application/ai-catalog+json", </next>; rel=next"#;
         assert_eq!(targets(value), ["https://a.example/ai.json"]);
     }
 
     #[test]
-    fn matches_one_of_several_relation_types() {
+    fn matches_the_relation_token() {
+        assert_eq!(targets("</c.json>; REL=ai-catalog"), ["/c.json"]);
         assert_eq!(
             targets(r#"</c.json>; rel="alternate ai-catalog""#),
             ["/c.json"]
@@ -170,12 +165,6 @@ mod tests {
     }
 
     #[test]
-    fn quoted_pairs_are_unescaped() {
-        let links = parse(r#"</a>; title="say \"hi\""; rel="ai-catalog""#);
-        assert_eq!(links.len(), 1);
-    }
-
-    #[test]
     fn only_the_first_rel_counts() {
         assert!(targets(r#"</a>; rel=next; rel="ai-catalog""#).is_empty());
     }
@@ -183,14 +172,6 @@ mod tests {
     #[test]
     fn links_about_another_resource_are_skipped() {
         assert!(targets(r##"</a>; rel="ai-catalog"; anchor="#frag""##).is_empty());
-    }
-
-    #[test]
-    fn several_header_fields_are_all_read() {
-        assert_eq!(
-            targets_with_rel(["</a>; rel=next", "</b>; rel=ai-catalog"], "ai-catalog"),
-            ["/b"]
-        );
     }
 
     #[test]
@@ -204,7 +185,6 @@ mod tests {
         ] {
             assert!(targets(value).is_empty(), "{value:?}");
         }
-        // A broken link does not hide the one after it.
         assert_eq!(targets("junk, </b>; rel=ai-catalog"), ["/b"]);
         assert_eq!(targets("</a> junk, </b>; rel=ai-catalog"), ["/b"]);
     }

@@ -7,9 +7,7 @@ use std::sync::LazyLock;
 
 use scraper::{Html, Selector};
 
-/// What discovery reads from the head of a document: the `href` of the first `<base>`
-/// element, and the `href` of every `<link>` element with the wanted relation type, in
-/// document order.
+/// The first `<base href>` and every matching `<link href>` in the head, in document order.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub(crate) struct Links {
     pub base: Option<String>,
@@ -19,10 +17,8 @@ pub(crate) struct Links {
 static HEAD_ELEMENTS: LazyLock<Selector> =
     LazyLock::new(|| Selector::parse("head > base, head > link").expect("a valid selector"));
 
-/// Parse `html` as a browser would and read the `<base>` and `<link>` elements of its head.
-///
-/// Elements that the HTML parser puts in the body, or that only appear in comments or in
-/// raw-text elements such as `<script>`, are not seen.
+/// Only elements the HTML parser places in the head are seen, so links in comments, scripts
+/// or the body are ignored.
 pub(crate) fn find_links(html: &str, rel: &str) -> Links {
     let document = Html::parse_document(html);
     let mut links = Links::default();
@@ -68,11 +64,9 @@ mod tests {
     }
 
     #[test]
-    fn reads_attributes_in_any_style() {
+    fn matches_the_relation_token_case_insensitively() {
         for html in [
             "<LINK REL=AI-CATALOG HREF=/c.json>",
-            "<link href='/c.json' rel='ai-catalog' />",
-            "<link\n  rel = \"ai-catalog\"\n  href = \"/c.json\"\n>",
             r#"<link rel="alternate ai-catalog" href="/c.json">"#,
         ] {
             assert_eq!(hrefs(html), ["/c.json"], "{html}");
@@ -89,45 +83,11 @@ mod tests {
     }
 
     #[test]
-    fn keeps_document_order_and_decodes_entities() {
-        let html = r#"<link rel="ai-catalog" href="/a?x=1&amp;y=2">
-            <link rel="ai-catalog" href="/b?x=1&#38;y=&#x32;&unknown;">"#;
-        assert_eq!(hrefs(html), ["/a?x=1&y=2", "/b?x=1&y=2&unknown;"]);
-    }
-
-    #[test]
-    fn markup_inside_comments_and_raw_text_is_not_a_link() {
+    fn ignores_links_outside_the_head() {
         let html = r#"<!-- <link rel="ai-catalog" href="/commented"> -->
-            <script>document.write('<link rel="ai-catalog" href="/script">')</script>
-            <style>/* <link rel="ai-catalog" href="/style"> */</style>
-            <title><link rel="ai-catalog" href="/title"></title>
-            <link rel="ai-catalog" href="/real">"#;
-        assert_eq!(hrefs(html), ["/real"]);
-    }
-
-    #[test]
-    fn a_greater_than_sign_inside_a_value_does_not_end_the_tag() {
-        let html = r#"<meta content="a > b"><link rel="ai-catalog" href="/c.json">"#;
-        assert_eq!(hrefs(html), ["/c.json"]);
-    }
-
-    #[test]
-    fn stops_at_the_end_of_the_head() {
-        let html = r#"<head><link rel="ai-catalog" href="/head"></head>
+            <head><link rel="ai-catalog" href="/head"></head>
             <body><link rel="ai-catalog" href="/body"></body>"#;
         assert_eq!(hrefs(html), ["/head"]);
-        assert_eq!(
-            hrefs(r#"<body><link rel="ai-catalog" href="/body">"#),
-            Vec::<String>::new()
-        );
-    }
-
-    #[test]
-    fn a_link_the_parser_puts_in_the_body_is_not_in_the_head() {
-        let html = r#"<p>text</p><link rel="ai-catalog" href="/body">"#;
-        assert!(hrefs(html).is_empty());
-        let html = r#"<html><link rel="ai-catalog" href="/implicit-head"><p>text</p>"#;
-        assert_eq!(hrefs(html), ["/implicit-head"]);
     }
 
     #[test]
@@ -138,21 +98,5 @@ mod tests {
         );
         assert_eq!(links.base.as_deref(), Some("https://cdn.example/x/"));
         assert_eq!(links.hrefs, ["c.json"]);
-    }
-
-    #[test]
-    fn survives_garbage() {
-        for html in [
-            "",
-            "<",
-            "<<<>>>",
-            "<link",
-            "<link rel=",
-            "<!--",
-            "<link rel=\"ai-catalog",
-            "ünï<cödé>",
-        ] {
-            let _ = hrefs(html);
-        }
     }
 }

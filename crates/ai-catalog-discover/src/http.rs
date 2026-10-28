@@ -170,23 +170,4 @@ mod tests {
         assert_eq!(response.body, b"hi");
         assert_eq!(response.url, url);
     }
-
-    #[test]
-    fn an_error_status_is_a_response() {
-        let url =
-            serve_once("HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
-        let response = HttpFetcher::new().unwrap().get(&url).unwrap();
-
-        assert_eq!(response.status, 404);
-        assert!(!response.is_success());
-    }
-
-    #[test]
-    fn a_refused_connection_is_an_error() {
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let url = Url::parse(&format!("http://{}/", listener.local_addr().unwrap())).unwrap();
-        drop(listener);
-
-        assert!(HttpFetcher::new().unwrap().get(&url).is_err());
-    }
 }

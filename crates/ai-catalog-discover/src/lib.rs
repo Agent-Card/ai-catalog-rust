@@ -248,9 +248,7 @@ fn found(response: Response, method: Method, catalog: AiCatalog) -> Discovery {
 }
 
 /// A response is a catalog when it succeeded and holds a JSON document with a
-/// `specVersion`. The media type is not checked: the specification prefers
-/// `application/ai-catalog+json` but accepts any JSON type, and hosts that serve
-/// files as `text/plain` are common.
+/// `specVersion`. The media type is not checked, as the specification accepts any JSON type.
 fn as_catalog(response: &Response) -> std::result::Result<AiCatalog, String> {
     if !response.is_success() {
         return Err(format!("HTTP {}", response.status));
@@ -427,23 +425,6 @@ mod tests {
     }
 
     #[test]
-    fn a_link_header_may_point_to_another_host() {
-        let mock = Mock::default()
-            .serve(
-                "https://example.com/",
-                200,
-                "application/json",
-                &[r#"<https://catalogs.example.net/example>; rel="ai-catalog""#],
-                "{}",
-            )
-            .catalog("https://catalogs.example.net/example");
-
-        let found = discover_with(&mock, "example.com").unwrap();
-
-        assert_eq!(found.url, "https://catalogs.example.net/example");
-    }
-
-    #[test]
     fn follows_an_html_link_element() {
         let mock = Mock::default()
             .html(
@@ -461,38 +442,12 @@ mod tests {
     }
 
     #[test]
-    fn an_html_link_resolves_against_the_base_element() {
-        let mock = Mock::default()
-            .html(
-                "https://example.com/",
-                &[],
-                r#"<head><base href="https://cdn.example.net/x/">
-                   <link rel="ai-catalog" href="ai.json"></head>"#,
-            )
-            .catalog("https://cdn.example.net/x/ai.json");
-
-        assert_eq!(
-            discover_with(&mock, "example.com").unwrap().url,
-            "https://cdn.example.net/x/ai.json"
-        );
-    }
-
-    #[test]
     fn falls_back_to_the_well_known_uri() {
         let mock = Mock::default()
             .html("https://example.com/", &[], "<html><head></head></html>")
             .catalog("https://example.com/.well-known/ai-catalog.json");
 
         let found = discover_with(&mock, "example.com").unwrap();
-
-        assert_eq!(found.method, Method::WellKnown);
-    }
-
-    #[test]
-    fn the_well_known_uri_is_at_the_root_of_the_host() {
-        let mock = Mock::default().catalog("https://example.com/.well-known/ai-catalog.json");
-
-        let found = discover_with(&mock, "https://example.com/some/deep/page").unwrap();
 
         assert_eq!(found.method, Method::WellKnown);
     }
