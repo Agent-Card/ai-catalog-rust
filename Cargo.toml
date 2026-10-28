@@ -8,6 +8,7 @@ members = [
   "crates/ai-catalog-validate",
   "crates/ai-catalog-trust",
   "crates/ai-catalog-oci",
+  "crates/ai-catalog-discover",
 ]
 resolver = "2"
 
@@ -20,14 +21,18 @@ version = "0.3.0"
 
 [workspace.dependencies]
 ai-catalog = { path = "crates/ai-catalog", version = "0.3.0" }
+ai-catalog-discover = { path = "crates/ai-catalog-discover", version = "0.3.0" }
 ai-catalog-oci = { path = "crates/ai-catalog-oci", version = "0.3.0" }
 ai-catalog-trust = { path = "crates/ai-catalog-trust", version = "0.3.0" }
 ai-catalog-validate = { path = "crates/ai-catalog-validate", version = "0.3.0" }
 base64 = "0.23"
 regex = "1"
+reqwest = { version = "0.13", features = ["blocking", "rustls"], default-features = false }
+scraper = { version = "0.29", default-features = false }
 serde = { version = "1.0", features = ["derive"] }
 serde_jcs = "0.2"
 serde_json = "1.0"
 sha2 = "0.11"
 thiserror = "2.0"
 time = { version = "0.3", features = ["formatting", "parsing"] }
+url = "2"

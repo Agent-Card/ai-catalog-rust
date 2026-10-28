@@ -17,10 +17,11 @@ Rust libraries for the [AI Catalog specification](https://ai-catalog.io/).
 | [`crates/ai-catalog`](crates/ai-catalog/README.md) | Core types (`AiCatalog`, `CatalogEntry`, `HostInfo`, `Publisher`, `TrustManifest`), parse and serialize helpers |
 | [`crates/ai-catalog-validate`](crates/ai-catalog-validate/README.md) | Semantic validation and conformance detection |
 | [`crates/ai-catalog-trust`](crates/ai-catalog-trust/README.md) | Digest verification and canonicalization |
+| [`crates/ai-catalog-discover`](crates/ai-catalog-discover/README.md) | Find a site's catalog through `Link` headers, HTML `<link>` elements and the well-known URI |
 | [`crates/ai-catalog-oci`](crates/ai-catalog-oci/README.md) | OCI artifact-set pack/unpack and standard OCI image layout import/export |
 
-`ai-catalog`, `ai-catalog-validate`, and `ai-catalog-trust` implement the
-specification. `ai-catalog-oci` is a convenience for distributing catalogs over
+`ai-catalog`, `ai-catalog-validate`, `ai-catalog-trust`, and `ai-catalog-discover`
+implement the specification. `ai-catalog-oci` is a convenience for distributing catalogs over
 existing registry infrastructure; OCI packaging is not part of the spec.
 
 The `ai-catalog` command-line tool lives in
@@ -71,6 +72,13 @@ Verify an attestation digest against its bytes:
 
 ```rust
 let matches = ai_catalog_trust::verify_digest("sha256:9f86d081...", bytes)?;
+```
+
+Find the catalog of a domain or website (`Link` header, HTML `<link>`, well-known URI):
+
+```rust
+let found = ai_catalog_discover::discover("example.com")?;
+println!("{} via {}", found.url, found.method);
 ```
 
 Each crate's README covers its API in more detail.

@@ -1,0 +1,21 @@
+# Copyright AI-Catalog Contributors (https://github.com/Agent-Card/ai-catalog-rust)
+# SPDX-License-Identifier: Apache-2.0
+
+[package]
+name = "ai-catalog-discover"
+description = "Find the AI Catalog of a website or domain through Link headers, HTML link elements and the well-known URI"
+keywords = ["ai", "catalog", "discovery", "well-known", "link"]
+categories = ["web-programming::http-client"]
+readme = "README.md"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+ai-catalog.workspace = true
+reqwest.workspace = true
+scraper.workspace = true
+thiserror.workspace = true
+url.workspace = true
