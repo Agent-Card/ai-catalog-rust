@@ -105,13 +105,12 @@ pub fn canonicalize(json: impl AsRef<[u8]>) -> Result<String> {
     serde_jcs::to_string(&parse_json(json)?).map_err(Error::from)
 }
 
-/// Returns the JCS form of the original JSON without its top-level `signature`, the payload a detached JWS covers.
+/// Returns the JCS form of a manifest or catalog without its own `signature.jws` and
+/// `additionalSignatures`, the payload a detached JWS covers.
 pub fn canonicalize_for_signature(json: impl AsRef<[u8]>) -> Result<String> {
     let mut value = parse_json(json)?;
 
-    if let Value::Object(object) = &mut value {
-        object.remove(SIGNATURE_MEMBER);
-    }
+    strip_signature(&mut value);
 
     serde_jcs::to_string(&value).map_err(Error::from)
 }
@@ -124,14 +123,27 @@ pub fn canonicalize_trust_manifest(manifest: &TrustManifest) -> Result<String> {
         None => serde_json::to_value(manifest)?,
     };
 
-    if let Value::Object(object) = &mut value {
-        object.remove(SIGNATURE_MEMBER);
-    }
+    strip_signature(&mut value);
 
     serde_jcs::to_string(&value).map_err(Error::from)
 }
 
+// The omissions are not recursive: nested `jws` and `additionalSignatures` members stay in.
+fn strip_signature(value: &mut Value) {
+    let Value::Object(object) = value else {
+        return;
+    };
+
+    object.remove(ADDITIONAL_SIGNATURES_MEMBER);
+
+    if let Some(Value::Object(signature)) = object.get_mut(SIGNATURE_MEMBER) {
+        signature.remove(JWS_MEMBER);
+    }
+}
+
 const SIGNATURE_MEMBER: &str = "signature";
+const JWS_MEMBER: &str = "jws";
+const ADDITIONAL_SIGNATURES_MEMBER: &str = "additionalSignatures";
 
 // Rejects duplicate member names, which `serde_json::Value` resolves silently.
 struct StrictValue(Value);
@@ -301,21 +313,21 @@ mod tests {
         let published = shapes()["empty attestations"].to_string();
         let mut manifest: TrustManifest = serde_json::from_str(&published).expect("decodes");
 
-        manifest.identity = "urn:example:b".to_owned();
+        manifest.contributor = "did:web:b.example".to_owned();
 
         assert_eq!(
             canonicalize_trust_manifest(&manifest).expect("canonicalizes"),
-            r#"{"identity":"urn:example:b"}"#
+            r#"{"contributor":"did:web:b.example"}"#
         );
     }
 
     #[test]
-    fn signature_payload_omits_only_the_signature() {
+    fn signature_payload_omits_only_the_jws_and_additional_signatures() {
         let published = shapes()["signed with unmodelled member"].to_string();
 
         assert_eq!(
             canonicalize_for_signature(&published).expect("canonicalizes"),
-            r#"{"futureMember":42,"identity":"urn:example"}"#
+            r#"{"contributor":"did:web:a.example","futureMember":42,"signature":{"futureMember":7,"issuedAt":"2026-03-15T10:00:00Z","profile":"did-web-v1","signer":"did:web:a.example"}}"#
         );
     }
 

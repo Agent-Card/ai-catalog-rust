@@ -36,3 +36,10 @@ pub(crate) fn is_valid_publisher(publisher: &str) -> bool {
 pub(crate) fn did(publisher: &str) -> String {
     format!("{DID_WEB_PREFIX}{publisher}")
 }
+
+/// Whether the value is a root `did:web` DID: a lowercase ASCII domain with no port, path or IP.
+pub(crate) fn is_root_did_web(value: &str) -> bool {
+    value
+        .strip_prefix(DID_WEB_PREFIX)
+        .is_some_and(is_valid_publisher)
+}

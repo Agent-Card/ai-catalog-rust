@@ -14,7 +14,7 @@ pub use media::{
     MEDIA_TYPE_MCP_SERVER_CARD,
 };
 pub use model::{
-    AiCatalog, Attestation, CatalogEntry, HostInfo, ProvenanceLink, Publisher, Subject,
+    AiCatalog, Attestation, CatalogEntry, HostInfo, ProvenanceLink, Publisher, Signature, Subject,
     TrustManifest, TrustSchema,
 };
 

@@ -1,32 +1,38 @@
 {
   "empty attestations": {
-    "identity": "urn:example:a",
+    "contributor": "did:web:a.example",
     "attestations": []
   },
   "empty provenance": {
-    "identity": "urn:example:a",
+    "contributor": "did:web:a.example",
     "provenance": []
   },
   "empty extensions": {
-    "identity": "urn:example:a",
+    "contributor": "did:web:a.example",
     "extensions": {}
   },
   "empty string member": {
-    "identity": "urn:example:a",
-    "identityType": ""
+    "contributor": "did:web:a.example",
+    "signature": {
+      "signer": "did:web:a.example",
+      "profile": "did-web-v1",
+      "issuedAt": "2026-03-15T10:00:00Z",
+      "jws": "",
+      "x": ""
+    }
   },
   "null member": {
-    "identity": "urn:example:a",
-    "privacyPolicyUrl": null
+    "contributor": "did:web:a.example",
+    "additionalSignatures": null
   },
   "unknown member": {
-    "identity": "urn:example:a",
+    "contributor": "did:web:a.example",
     "com.example.extra": {
       "a": 1
     }
   },
   "unknown nested member": {
-    "identity": "urn:example:a",
+    "contributor": "did:web:a.example",
     "attestations": [
       {
         "type": "t",
@@ -36,7 +42,7 @@
     ]
   },
   "empty nested array": {
-    "identity": "urn:example:a",
+    "contributor": "did:web:a.example",
     "trustSchema": {
       "identifier": "i",
       "version": "1",
@@ -44,17 +50,33 @@
     }
   },
   "whitespace and member order": {
-    "signature": "ZXlK..",
-    "subject": {
-      "url": "https://example.com/a",
-      "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
-      "type": "text/plain"
+    "signature": {
+      "jws": "ZXlK..c2ln",
+      "profile": "did-web-v1",
+      "issuedAt": "2026-03-15T10:00:00Z",
+      "signer": "did:web:a.example"
     },
-    "identity": "urn:example:a"
+    "subject": {
+      "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+      "type": "text/plain",
+      "identifier": "urn:air:a.example:t:a"
+    },
+    "contributor": "did:web:a.example"
   },
   "signed with unmodelled member": {
-    "signature": "sig",
-    "identity": "urn:example",
-    "futureMember": 42
+    "signature": {
+      "signer": "did:web:a.example",
+      "profile": "did-web-v1",
+      "issuedAt": "2026-03-15T10:00:00Z",
+      "jws": "sig",
+      "futureMember": 7
+    },
+    "contributor": "did:web:a.example",
+    "futureMember": 42,
+    "additionalSignatures": [
+      {
+        "jws": "other"
+      }
+    ]
   }
 }

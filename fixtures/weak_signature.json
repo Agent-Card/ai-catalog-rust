@@ -4,137 +4,178 @@
     "displayName": "Example Host",
     "identifier": "did:web:example.com"
   },
-  "signature": "eyJhbGciOiJIUzI1NiJ9..c2lnbmF0dXJlLXBsYWNlaG9sZGVy",
+  "signature": {
+    "signer": "did:web:example.com",
+    "profile": "did-web-v1",
+    "issuedAt": "2026-03-15T10:00:00Z",
+    "jws": "eyJhbGciOiJIUzI1NiIsInR5cCI6ImFpLWNhdGFsb2crandzIn0..c2lnbmF0dXJlLXBsYWNlaG9sZGVy"
+  },
   "entries": [
     {
       "identifier": "urn:example:hmac",
       "displayName": "HMAC Signed",
       "type": "application/json",
       "url": "https://example.com/hmac.json",
-      "trustManifest": {
-        "identity": "urn:example:hmac",
-        "subject": {
-          "identifier": "urn:example:hmac",
-          "type": "application/json",
-          "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
-          "url": "https://example.com/hmac.json"
-        },
-        "issuedAt": "2026-03-15T10:00:00Z",
-        "signature": "eyJhbGciOiJIUzI1NiJ9..c2lnbmF0dXJlLXBsYWNlaG9sZGVy"
-      }
+      "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+      "trustManifests": [
+        {
+          "contributor": "urn:example:hmac",
+          "subject": {
+            "identifier": "urn:example:hmac",
+            "type": "application/json",
+            "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+          },
+          "signature": {
+            "signer": "urn:example:hmac",
+            "profile": "did-web-v1",
+            "issuedAt": "2026-03-15T10:00:00Z",
+            "jws": "eyJhbGciOiJIUzI1NiIsInR5cCI6ImFpLWNhdGFsb2ctdHJ1c3QtbWFuaWZlc3QrandzIn0..c2lnbmF0dXJlLXBsYWNlaG9sZGVy"
+          }
+        }
+      ]
     },
     {
       "identifier": "urn:example:none-md5",
       "displayName": "None Signed, MD5 Digest",
       "type": "application/json",
       "url": "https://example.com/none-md5.json",
-      "trustManifest": {
-        "identity": "urn:example:none-md5",
-        "subject": {
-          "identifier": "urn:example:none-md5",
-          "type": "application/json",
-          "digest": "md5:0123456789abcdef0123456789abcdef",
-          "url": "https://example.com/none-md5.json"
-        },
-        "issuedAt": "2026-03-15T10:00:00Z",
-        "signature": "eyJhbGciOiJub25lIn0..c2lnbmF0dXJlLXBsYWNlaG9sZGVy"
-      }
+      "digest": "md5:0123456789abcdef0123456789abcdef",
+      "trustManifests": [
+        {
+          "contributor": "urn:example:none-md5",
+          "subject": {
+            "identifier": "urn:example:none-md5",
+            "type": "application/json",
+            "digest": "md5:0123456789abcdef0123456789abcdef"
+          },
+          "signature": {
+            "signer": "urn:example:none-md5",
+            "profile": "did-web-v1",
+            "issuedAt": "2026-03-15T10:00:00Z",
+            "jws": "eyJhbGciOiJub25lIiwidHlwIjoiYWktY2F0YWxvZy10cnVzdC1tYW5pZmVzdCtqd3MifQ..c2lnbmF0dXJlLXBsYWNlaG9sZGVy"
+          }
+        }
+      ]
     },
     {
       "identifier": "urn:example:mixed-case-none",
       "displayName": "Mixed-Case None",
       "type": "application/json",
       "url": "https://example.com/mixed-case-none.json",
-      "trustManifest": {
-        "identity": "urn:example:mixed-case-none",
-        "subject": {
-          "identifier": "urn:example:mixed-case-none",
-          "type": "application/json",
-          "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
-          "url": "https://example.com/mixed-case-none.json"
-        },
-        "issuedAt": "2026-03-15T10:00:00Z",
-        "signature": "eyJhbGciOiJuT25FIn0..c2lnbmF0dXJlLXBsYWNlaG9sZGVy"
-      }
+      "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+      "trustManifests": [
+        {
+          "contributor": "urn:example:mixed-case-none",
+          "subject": {
+            "identifier": "urn:example:mixed-case-none",
+            "type": "application/json",
+            "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+          },
+          "signature": {
+            "signer": "urn:example:mixed-case-none",
+            "profile": "did-web-v1",
+            "issuedAt": "2026-03-15T10:00:00Z",
+            "jws": "eyJhbGciOiJuT25FIiwidHlwIjoiYWktY2F0YWxvZy10cnVzdC1tYW5pZmVzdCtqd3MifQ..c2lnbmF0dXJlLXBsYWNlaG9sZGVy"
+          }
+        }
+      ]
     },
     {
       "identifier": "urn:example:garbled",
       "displayName": "Undecodable Header",
       "type": "application/json",
       "url": "https://example.com/garbled.json",
-      "trustManifest": {
-        "identity": "urn:example:garbled",
-        "subject": {
-          "identifier": "urn:example:garbled",
-          "type": "application/json",
-          "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
-          "url": "https://example.com/garbled.json"
-        },
-        "issuedAt": "2026-03-15T10:00:00Z",
-        "signature": "bm90LWpzb24..c2lnbmF0dXJlLXBsYWNlaG9sZGVy"
-      }
+      "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+      "trustManifests": [
+        {
+          "contributor": "urn:example:garbled",
+          "subject": {
+            "identifier": "urn:example:garbled",
+            "type": "application/json",
+            "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+          },
+          "signature": {
+            "signer": "urn:example:garbled",
+            "profile": "did-web-v1",
+            "issuedAt": "2026-03-15T10:00:00Z",
+            "jws": "bm90LWpzb24..c2lnbmF0dXJlLXBsYWNlaG9sZGVy"
+          }
+        }
+      ]
     },
     {
       "identifier": "urn:example:weak-evidence",
       "displayName": "Weak Evidence Digests",
       "type": "application/json",
       "url": "https://example.com/weak-evidence.json",
-      "trustManifest": {
-        "identity": "urn:example:weak-evidence",
-        "subject": {
-          "identifier": "urn:example:weak-evidence",
-          "type": "application/json",
-          "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
-          "url": "https://example.com/weak-evidence.json"
-        },
-        "issuedAt": "2026-03-15T10:00:00Z",
-        "signature": "eyJhbGciOiJFUzI1NiJ9..c2lnbmF0dXJlLXBsYWNlaG9sZGVy",
-        "attestations": [
-          {
-            "type": "sbom",
-            "uri": "https://example.com/sbom.json",
-            "digest": "md5:0123456789abcdef0123456789abcdef"
-          }
-        ],
-        "provenance": [
-          {
-            "relation": "derivedFrom",
-            "sourceId": "https://github.com/example/repo",
-            "sourceDigest": "sha1:0123456789abcdef0123456789abcdef01234567"
-          }
-        ]
-      }
+      "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+      "trustManifests": [
+        {
+          "contributor": "urn:example:weak-evidence",
+          "subject": {
+            "identifier": "urn:example:weak-evidence",
+            "type": "application/json",
+            "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+          },
+          "signature": {
+            "signer": "urn:example:weak-evidence",
+            "profile": "did-web-v1",
+            "issuedAt": "2026-03-15T10:00:00Z",
+            "jws": "eyJhbGciOiJFUzI1NiIsInR5cCI6ImFpLWNhdGFsb2ctdHJ1c3QtbWFuaWZlc3QrandzIn0..c2lnbmF0dXJlLXBsYWNlaG9sZGVy"
+          },
+          "attestations": [
+            {
+              "type": "sbom",
+              "uri": "https://example.com/sbom.json",
+              "digest": "md5:0123456789abcdef0123456789abcdef"
+            }
+          ],
+          "provenance": [
+            {
+              "relation": "derivedFrom",
+              "sourceId": "https://github.com/example/repo",
+              "sourceDigest": "sha1:0123456789abcdef0123456789abcdef01234567"
+            }
+          ]
+        }
+      ]
     },
     {
       "identifier": "urn:example:compliant",
       "displayName": "Compliant",
       "type": "application/json",
       "url": "https://example.com/compliant.json",
-      "trustManifest": {
-        "identity": "urn:example:compliant",
-        "subject": {
-          "identifier": "urn:example:compliant",
-          "type": "application/json",
-          "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
-          "url": "https://example.com/compliant.json"
-        },
-        "issuedAt": "2026-03-15T10:00:00Z",
-        "signature": "eyJhbGciOiJFUzI1NiJ9..c2lnbmF0dXJlLXBsYWNlaG9sZGVy",
-        "attestations": [
-          {
-            "type": "sbom",
-            "uri": "https://example.com/sbom.json",
+      "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+      "trustManifests": [
+        {
+          "contributor": "urn:example:compliant",
+          "subject": {
+            "identifier": "urn:example:compliant",
+            "type": "application/json",
             "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
-          }
-        ],
-        "provenance": [
-          {
-            "relation": "derivedFrom",
-            "sourceId": "https://github.com/example/repo",
-            "sourceDigest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
-          }
-        ]
-      }
+          },
+          "signature": {
+            "signer": "urn:example:compliant",
+            "profile": "did-web-v1",
+            "issuedAt": "2026-03-15T10:00:00Z",
+            "jws": "eyJhbGciOiJFUzI1NiIsInR5cCI6ImFpLWNhdGFsb2ctdHJ1c3QtbWFuaWZlc3QrandzIn0..c2lnbmF0dXJlLXBsYWNlaG9sZGVy"
+          },
+          "attestations": [
+            {
+              "type": "sbom",
+              "uri": "https://example.com/sbom.json",
+              "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+            }
+          ],
+          "provenance": [
+            {
+              "relation": "derivedFrom",
+              "sourceId": "https://github.com/example/repo",
+              "sourceDigest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+            }
+          ]
+        }
+      ]
     }
   ]
 }

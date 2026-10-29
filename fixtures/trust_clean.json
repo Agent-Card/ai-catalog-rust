@@ -1,6 +1,11 @@
 {
   "specVersion": "1.0",
-  "signature": "eyJhbGciOiJFUzI1NiJ9..Y2F0YWxvZy1zaWduYXR1cmU",
+  "signature": {
+    "signer": "did:web:example.com",
+    "profile": "did-web-v1",
+    "issuedAt": "2026-03-15T10:00:00Z",
+    "jws": "eyJhbGciOiJFUzI1NiIsInR5cCI6ImFpLWNhdGFsb2crandzIn0..Y2F0YWxvZy1zaWduYXR1cmU"
+  },
   "host": {
     "displayName": "Example Host",
     "identifier": "did:web:example.com"
@@ -11,39 +16,45 @@
       "displayName": "Artifact",
       "type": "application/json",
       "url": "https://example.com/artifact.json",
-      "trustManifest": {
-        "identity": "did:web:acme.com",
-        "subject": {
-          "identifier": "urn:air:acme.com:agent:artifact",
-          "type": "application/json",
-          "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
-          "url": "https://example.com/artifact.json"
-        },
-        "issuedAt": "2026-03-15T10:00:00Z",
-        "signature": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImRpZDp3ZWI6YWNtZS5jb20ja2V5LTEifQ..c2lnbmF0dXJlLXBsYWNlaG9sZGVy",
-        "trustSchema": {
-          "identifier": "urn:trust:example",
-          "version": "1.0"
-        },
-        "attestations": [
-          {
-            "type": "publisher-identity",
-            "uri": "https://example.com/p.jwt",
+      "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+      "trustManifests": [
+        {
+          "contributor": "did:web:acme.com",
+          "subject": {
+            "identifier": "urn:air:acme.com:agent:artifact",
+            "type": "application/json",
             "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+          },
+          "signature": {
+            "signer": "did:web:acme.com",
+            "profile": "did-web-v1",
+            "issuedAt": "2026-03-15T10:00:00Z",
+            "jws": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImRpZDp3ZWI6YWNtZS5jb20ja2V5LTEiLCJ0eXAiOiJhaS1jYXRhbG9nLXRydXN0LW1hbmlmZXN0K2p3cyJ9..c2lnbmF0dXJlLXBsYWNlaG9sZGVy"
+          },
+          "trustSchema": {
+            "identifier": "urn:trust:example",
+            "version": "1.0"
+          },
+          "attestations": [
+            {
+              "type": "publisher-identity",
+              "uri": "https://example.com/p.jwt",
+              "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+            }
+          ],
+          "provenance": [
+            {
+              "relation": "publishedFrom",
+              "sourceId": "https://github.com/example/repo",
+              "sourceDigest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+            }
+          ],
+          "extensions": {
+            "com.example.zeta": true,
+            "com.example.alpha": 1
           }
-        ],
-        "provenance": [
-          {
-            "relation": "publishedFrom",
-            "sourceId": "https://github.com/example/repo",
-            "sourceDigest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
-          }
-        ],
-        "extensions": {
-          "com.example.zeta": true,
-          "com.example.alpha": 1
         }
-      }
+      ]
     }
   ]
 }

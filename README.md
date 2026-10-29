@@ -14,7 +14,7 @@ Rust libraries for the [AI Catalog specification](https://ai-catalog.io/).
 
 | Crate | Description |
 |---|---|
-| [`crates/ai-catalog`](crates/ai-catalog/README.md) | Core types (`AiCatalog`, `CatalogEntry`, `HostInfo`, `Publisher`, `TrustManifest`), parse and serialize helpers |
+| [`crates/ai-catalog`](crates/ai-catalog/README.md) | Core types (`AiCatalog`, `CatalogEntry`, `HostInfo`, `Publisher`, `Signature`, `TrustManifest`), parse and serialize helpers |
 | [`crates/ai-catalog-validate`](crates/ai-catalog-validate/README.md) | Semantic validation and conformance detection |
 | [`crates/ai-catalog-trust`](crates/ai-catalog-trust/README.md) | Digest verification and canonicalization |
 | [`crates/ai-catalog-discover`](crates/ai-catalog-discover/README.md) | Find a site's catalog through `Link` headers, HTML `<link>` elements and the well-known URI |
@@ -34,7 +34,7 @@ these crates from crates.io.
 |---|---|
 | **Minimal** | `specVersion`, and every entry carrying `identifier`, `type`, and exactly one of `url` or `data` |
 | **Discoverable** | Minimal + a `host` object identifying the catalog operator |
-| **Trusted** | Discoverable + every root entry `trustManifest` signed, bound to its entry, unexpired and conforming to the did:web Publisher Profile |
+| **Trusted** | Discoverable + every root entry that carries `trustManifests` has one signed by its publisher under the did:web Publisher Profile, bound to the entry and current |
 
 ## Usage
 

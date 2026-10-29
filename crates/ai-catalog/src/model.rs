@@ -18,7 +18,10 @@ pub struct AiCatalog {
     #[serde(default)]
     pub entries: Vec<CatalogEntry>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub signature: Option<String>,
+    pub signature: Option<Signature>,
+    /// Reserved; consumers accept and ignore it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub additional_signatures: Option<Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extensions: Option<BTreeMap<String, Value>>,
     #[serde(flatten, default)]
@@ -113,8 +116,11 @@ pub struct CatalogEntry {
     pub tags: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub publisher: Option<Publisher>,
+    /// The artifact content digest, in `algorithm:hex-value` form.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub trust_manifest: Option<TrustManifest>,
+    pub digest: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub trust_manifests: Vec<TrustManifest>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub updated_at: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -146,27 +152,20 @@ pub struct Publisher {
 #[serde(remote = "Self", rename_all = "camelCase")]
 pub struct TrustManifest {
     #[serde(default)]
-    pub identity: String,
+    pub contributor: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub identity_type: Option<String>,
+    pub subject: Option<Subject>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signature: Option<Signature>,
+    /// Reserved; consumers accept and ignore it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub additional_signatures: Option<Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub trust_schema: Option<TrustSchema>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub attestations: Vec<Attestation>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub provenance: Vec<ProvenanceLink>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub privacy_policy_url: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub terms_of_service_url: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub subject: Option<Subject>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub issued_at: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub expires_at: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub signature: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extensions: Option<BTreeMap<String, Value>>,
     #[serde(flatten, default)]
@@ -229,8 +228,24 @@ pub struct Subject {
     pub r#type: String,
     #[serde(default)]
     pub digest: String,
+    #[serde(flatten, default)]
+    pub extra_fields: BTreeMap<String, Value>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Signature {
+    #[serde(default)]
+    pub signer: String,
+    #[serde(default)]
+    pub profile: String,
+    #[serde(default)]
+    pub issued_at: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub url: Option<String>,
+    pub expires_at: Option<String>,
+    /// A detached compact JWS, `encodedProtectedHeader..encodedSignature`.
+    #[serde(default)]
+    pub jws: String,
     #[serde(flatten, default)]
     pub extra_fields: BTreeMap<String, Value>,
 }

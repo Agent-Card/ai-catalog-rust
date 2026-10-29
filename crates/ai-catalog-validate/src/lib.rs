@@ -10,6 +10,7 @@ mod identity;
 mod jws;
 mod manifest;
 mod profile;
+mod signature;
 
 use std::collections::{BTreeMap, HashSet};
 use std::fmt;
@@ -18,6 +19,7 @@ use std::time::SystemTime;
 
 use ai_catalog::{AiCatalog, CatalogEntry, HostInfo, Publisher};
 use regex::Regex;
+use serde_json::Value;
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
@@ -33,8 +35,9 @@ pub enum ConformanceLevel {
     Minimal,
     /// A valid document with a host.
     Discoverable,
-    /// A discoverable document in which every root entry trust manifest is signed, bound to its
-    /// entry, unexpired and conforms to the did:web Publisher Profile. Signatures are not verified.
+    /// A discoverable document in which every root entry that carries trust manifests has one
+    /// signed by its publisher under the did:web Publisher Profile, bound to the entry and
+    /// current. Signatures are not verified.
     Trusted,
 }
 
@@ -83,7 +86,7 @@ impl Default for Options {
 }
 
 impl Options {
-    /// Sets the time against which trust manifest expiry is judged. Defaults to the current time.
+    /// Sets the time against which signature validity is judged. Defaults to the current time.
     #[must_use]
     pub fn with_clock(mut self, now: SystemTime) -> Self {
         self.now = Some(now);
@@ -114,7 +117,7 @@ pub fn validate_with(catalog: &AiCatalog, options: &Options) -> ValidationResult
         max_depth: options.max_nesting_depth,
         errors: Vec::new(),
         warnings: Vec::new(),
-        manifests: 0,
+        entries_with_manifests: 0,
         held_back: false,
     };
 
@@ -133,8 +136,9 @@ struct Validator {
     max_depth: usize,
     errors: Vec<Diagnostic>,
     warnings: Vec<Diagnostic>,
-    /// Counts the root entry trust manifests; `held_back` is set when one is not ready to be trusted.
-    manifests: usize,
+    /// Counts the root entries carrying trust manifests; `held_back` is set when one of them has
+    /// no manifest ready to be trusted.
+    entries_with_manifests: usize,
     held_back: bool,
 }
 
@@ -158,7 +162,7 @@ impl Validator {
     fn level(&self, catalog: &AiCatalog) -> ConformanceLevel {
         if !self.errors.is_empty() || catalog.host.is_none() {
             ConformanceLevel::Minimal
-        } else if self.manifests > 0 && !self.held_back {
+        } else if self.entries_with_manifests > 0 && !self.held_back {
             ConformanceLevel::Trusted
         } else {
             ConformanceLevel::Discoverable
@@ -168,7 +172,15 @@ impl Validator {
     fn validate_catalog(&mut self, catalog: &AiCatalog, path: &str, depth: usize) {
         self.validate_spec_version(&catalog.spec_version, &format!("{path}.specVersion"));
         self.validate_host(catalog.host.as_ref(), &format!("{path}.host"));
-        self.validate_signature(text(&catalog.signature), &format!("{path}.signature"));
+
+        if let Some(signature) = &catalog.signature {
+            self.validate_signature(
+                signature,
+                signature::Kind::Catalog,
+                &format!("{path}.signature"),
+            );
+        }
+
         self.validate_extension_keys(catalog.extensions.as_ref(), &format!("{path}.extensions"));
         self.validate_entry_uniqueness(&catalog.entries, path);
 
@@ -265,6 +277,7 @@ impl Validator {
 
         self.validate_timestamp(text(&entry.updated_at), &format!("{path}.updatedAt"));
         self.validate_extension_keys(entry.extensions.as_ref(), &format!("{path}.extensions"));
+        self.validate_policy_urls(entry.extensions.as_ref(), &format!("{path}.extensions"));
         self.validate_publisher(entry.publisher.as_ref(), &format!("{path}.publisher"));
         self.validate_entry_trust(entry, path, depth);
         self.validate_nested_catalog(entry, path, depth);
@@ -400,66 +413,36 @@ impl Validator {
         }
     }
 
-    fn validate_signature(&mut self, signature: &str, path: &str) {
-        if signature.is_empty() {
+    fn validate_policy_urls(&mut self, extensions: Option<&BTreeMap<String, Value>>, path: &str) {
+        let Some(value) = extensions.and_then(|extensions| extensions.get(POLICY_URLS_KEY)) else {
             return;
-        }
-
-        if !jws::is_detached(signature) {
-            self.error(
-                Code::SignatureForm,
-                path,
-                "signature must use detached JWS compact serialization",
-            );
-            return;
-        }
-
-        let header = match jws::parse(signature) {
-            Ok(header) => header,
-            Err(reason) => {
-                self.error(
-                    Code::SignatureMalformed,
-                    path,
-                    format!(
-                        "signature JWS header must be base64url-encoded JSON declaring an 'alg': {reason}"
-                    ),
-                );
-                return;
-            }
         };
 
-        if jws::is_forbidden(&header.algorithm) {
+        let valid = value.as_object().is_some_and(|members| {
+            ["privacyPolicyUrl", "termsOfServiceUrl"]
+                .iter()
+                .all(|name| members.get(*name).is_none_or(Value::is_string))
+        });
+
+        if !valid {
             self.error(
-                Code::SignatureAlgorithm,
+                Code::PolicyUrls,
                 path,
                 format!(
-                    "signature algorithm '{}' must be rejected; a signature requires an asymmetric algorithm",
-                    header.algorithm
-                ),
-            );
-            return;
-        }
-
-        if header.has("b64") {
-            self.error(
-                Code::SignatureB64,
-                path,
-                "signature header must not contain 'b64'",
-            );
-        }
-
-        if !jws::ALLOWED_ALGORITHMS.contains(&header.algorithm.as_str()) {
-            self.warning(
-                Code::SignatureUnlisted,
-                path,
-                format!(
-                    "signature algorithm '{}' is outside the specification allowlist ({})",
-                    header.algorithm,
-                    jws::ALLOWED_ALGORITHMS.join(", ")
+                    "{POLICY_URLS_KEY} must be an object whose privacyPolicyUrl and termsOfServiceUrl, when present, are strings"
                 ),
             );
         }
     }
+}
+
+const POLICY_URLS_KEY: &str = "https://ai-catalog.org/extensions/policy-urls";
+
+static ABSOLUTE_URI: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^[A-Za-z][A-Za-z0-9+.\-]*:\S+$").expect("URI pattern is valid"));
+
+fn is_absolute_uri(value: &str) -> bool {
+    ABSOLUTE_URI.is_match(value)
 }
 
 static REVERSE_DNS_KEY: LazyLock<Regex> = LazyLock::new(|| {

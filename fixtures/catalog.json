@@ -97,18 +97,24 @@
       "displayName": "Trusted Service",
       "type": "application/mcp-server-card+json",
       "url": "https://example.com/trusted.json",
-      "trustManifest": {
-        "identity": "did:web:acme.com",
-        "subject": {
-          "identifier": "urn:air:acme.com:mcp:trusted",
-          "type": "application/mcp-server-card+json",
-          "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
-          "url": "https://example.com/trusted.json"
-        },
-        "issuedAt": "2026-03-15T10:00:00Z",
-        "expiresAt": "2126-03-15T10:00:00Z",
-        "signature": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImRpZDp3ZWI6YWNtZS5jb20ja2V5LTEifQ..c2lnbmF0dXJlLXBsYWNlaG9sZGVy"
-      }
+      "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+      "trustManifests": [
+        {
+          "contributor": "did:web:acme.com",
+          "subject": {
+            "identifier": "urn:air:acme.com:mcp:trusted",
+            "type": "application/mcp-server-card+json",
+            "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+          },
+          "signature": {
+            "signer": "did:web:acme.com",
+            "profile": "did-web-v1",
+            "issuedAt": "2026-03-15T10:00:00Z",
+            "expiresAt": "2126-03-15T10:00:00Z",
+            "jws": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImRpZDp3ZWI6YWNtZS5jb20ja2V5LTEiLCJ0eXAiOiJhaS1jYXRhbG9nLXRydXN0LW1hbmlmZXN0K2p3cyJ9..c2lnbmF0dXJlLXBsYWNlaG9sZGVy"
+          }
+        }
+      ]
     },
     {
       "identifier": "urn:example:catalog:child",
