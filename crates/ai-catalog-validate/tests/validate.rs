@@ -21,7 +21,7 @@ fn entry(index: usize, member: &str) -> String {
 }
 
 fn manifest(index: usize, member: &str) -> String {
-    entry(index, &format!(".trustManifest{member}"))
+    entry(index, &format!(".trustManifests[0]{member}"))
 }
 
 fn compare(kind: &str, got: &[Diagnostic], want: &[(Code, String)]) {
@@ -80,7 +80,7 @@ fn reports_rule_violations() {
 
     let errors = [
         at(Code::HostMember, "catalog.host.displayName"),
-        at(Code::SignatureForm, "catalog.signature"),
+        at(Code::SignatureForm, "catalog.signature.jws"),
         at(Code::ExtensionKey, "catalog.extensions"),
         at(Code::EntryArtifact, entry(0, "")),
         at(Code::EntryArtifact, entry(1, "")),
@@ -92,28 +92,39 @@ fn reports_rule_violations() {
         at(Code::EntryMember, entry(9, ".type")),
         at(Code::PublisherMember, entry(9, ".publisher.identifier")),
         at(Code::PublisherMember, entry(9, ".publisher.displayName")),
-        at(Code::ManifestIdentity, manifest(9, ".identity")),
+        at(Code::ManifestContributor, manifest(9, ".contributor")),
         at(Code::ManifestEmpty, manifest(9, "")),
         at(Code::Timestamp, entry(10, ".updatedAt")),
         at(Code::ExtensionKey, entry(11, ".extensions")),
         at(Code::ExtensionKey, manifest(11, ".extensions")),
         at(Code::ManifestEmpty, manifest(12, "")),
-        at(Code::ManifestEmpty, manifest(13, "")),
         at(Code::ManifestSignedMember, manifest(13, ".subject")),
-        at(Code::ManifestSignedMember, manifest(13, ".issuedAt")),
-        at(Code::Timestamp, manifest(14, ".issuedAt")),
+        at(Code::SignatureMember, manifest(13, ".signature.issuedAt")),
+        at(Code::EntryDigest, entry(13, ".digest")),
+        at(Code::Timestamp, manifest(14, ".signature.issuedAt")),
         at(Code::SubjectMismatch, manifest(15, ".subject.identifier")),
         at(Code::SubjectMismatch, manifest(15, ".subject.version")),
         at(Code::SubjectMismatch, manifest(15, ".subject.type")),
-        at(Code::SubjectMismatch, manifest(15, ".subject.url")),
+        at(Code::SubjectMismatch, manifest(15, ".subject.digest")),
         at(Code::NestedInvalid, entry(16, ".data")),
+        at(Code::ManifestSigner, manifest(17, ".signature.signer")),
+        at(Code::SignatureType, manifest(18, ".signature.jws")),
+        at(Code::SignatureType, manifest(19, ".signature.jws")),
+        at(Code::SignatureSigner, manifest(20, ".signature.signer")),
+        at(Code::ManifestSigner, manifest(20, ".signature.signer")),
+        at(Code::ManifestContributorUri, manifest(21, ".contributor")),
+        at(Code::SignatureMember, manifest(22, ".signature.profile")),
+        at(Code::SignatureMember, manifest(22, ".signature.jws")),
     ];
 
     let warnings = [
         at(Code::IdentifierNotUri, entry(10, ".identifier")),
-        at(Code::ManifestExpired, manifest(14, ".expiresAt")),
-        at(Code::ProfileIdentifier, manifest(15, "")),
-        at(Code::ProfileKeyId, manifest(15, ".signature")),
+        at(Code::ProfileSigner, manifest(13, ".signature.signer")),
+        at(Code::ProfileKeyId, manifest(13, ".signature.jws")),
+        at(Code::SignatureExpired, manifest(14, ".signature.expiresAt")),
+        at(Code::ProfileSigner, manifest(15, ".signature.signer")),
+        at(Code::ProfileKeyId, manifest(15, ".signature.jws")),
+        at(Code::ProfileSigner, manifest(20, ".signature.signer")),
     ];
 
     compare("error", &result.errors, &errors);
@@ -121,16 +132,15 @@ fn reports_rule_violations() {
 }
 
 #[test]
-fn rejects_weak_signatures_and_digests() {
+fn rejects_none_signatures_and_weak_digests() {
     let result = validate(&parse("weak_signature.json"));
 
     let errors = [
-        at(Code::SignatureAlgorithm, "catalog.signature"),
-        at(Code::SignatureAlgorithm, manifest(0, ".signature")),
-        at(Code::SignatureAlgorithm, manifest(1, ".signature")),
+        at(Code::DigestInvalid, entry(1, ".digest")),
+        at(Code::SignatureAlgorithm, manifest(1, ".signature.jws")),
         at(Code::DigestInvalid, manifest(1, ".subject.digest")),
-        at(Code::SignatureAlgorithm, manifest(2, ".signature")),
-        at(Code::SignatureMalformed, manifest(3, ".signature")),
+        at(Code::SignatureAlgorithm, manifest(2, ".signature.jws")),
+        at(Code::SignatureMalformed, manifest(3, ".signature.jws")),
         at(Code::DigestInvalid, manifest(4, ".attestations[0].digest")),
         at(
             Code::DigestInvalid,
@@ -142,28 +152,24 @@ fn rejects_weak_signatures_and_digests() {
 }
 
 #[test]
-fn applies_the_did_web_profile() {
+fn applies_the_did_web_signer_profile() {
     let result = validate(&parse("profile.json"));
 
     let warnings = [
-        at(Code::ProfileIdentifier, manifest(1, "")),
-        at(Code::ProfileIdentity, manifest(2, ".identity")),
-        at(Code::ProfileIdentity, manifest(3, ".identity")),
-        at(Code::ProfileType, manifest(4, ".identityType")),
-        at(Code::ProfileAlgorithm, manifest(5, ".signature")),
-        at(Code::ProfileKeyId, manifest(6, ".signature")),
-        at(Code::ProfileKeyId, manifest(7, ".signature")),
-        at(Code::ProfileKeyId, manifest(8, ".signature")),
-        at(Code::ProfileHeader, manifest(9, ".signature")),
-        at(Code::ProfileIdentifier, manifest(10, "")),
-        at(Code::ProfileIdentifier, manifest(14, "")),
-        at(Code::ProfileIdentifier, manifest(15, "")),
+        at(Code::ProfileSigner, manifest(3, ".signature.signer")),
+        at(Code::ProfileAlgorithm, manifest(5, ".signature.jws")),
+        at(Code::ProfileKeyId, manifest(6, ".signature.jws")),
+        at(Code::ProfileKeyId, manifest(7, ".signature.jws")),
+        at(Code::ProfileKeyId, manifest(8, ".signature.jws")),
+        at(Code::ProfileHeader, manifest(9, ".signature.jws")),
+        at(Code::ProfileSigner, manifest(10, ".signature.signer")),
+        at(Code::ProfileSigner, manifest(15, ".signature.signer")),
     ];
 
     let errors = [
-        at(Code::SignatureB64, manifest(11, ".signature")),
-        at(Code::SignatureMalformed, manifest(12, ".signature")),
-        at(Code::SignatureForm, manifest(13, ".signature")),
+        at(Code::SignatureB64, manifest(11, ".signature.jws")),
+        at(Code::SignatureMalformed, manifest(12, ".signature.jws")),
+        at(Code::SignatureForm, manifest(13, ".signature.jws")),
     ];
 
     compare("warning", &result.warnings, &warnings);
@@ -171,30 +177,59 @@ fn applies_the_did_web_profile() {
 }
 
 #[test]
-fn profile_violation_holds_back_trusted() {
-    let mut catalog = parse("trust_clean.json");
-    let trust = catalog.entries[0]
-        .trust_manifest
-        .as_mut()
-        .expect("fixture has a trust manifest");
+fn only_the_publisher_makes_a_catalog_trusted() {
+    let catalog = parse("profile.json");
 
-    trust.identity = "did:web:other.example".to_owned();
+    for index in 0..catalog.entries.len() {
+        let alone = AiCatalog {
+            entries: vec![catalog.entries[index].clone()],
+            ..catalog.clone()
+        };
+        let trusted = validate(&alone).conformance_level == ConformanceLevel::Trusted;
+
+        assert_eq!(trusted, index == 0, "entry {index}");
+    }
+}
+
+#[test]
+fn an_assessor_alone_does_not_make_a_catalog_trusted() {
+    let mut catalog = parse("trust_clean.json");
+    let trust = &mut catalog.entries[0].trust_manifests[0];
+
+    trust.contributor = "did:web:assessor.example".to_owned();
+    trust.signature.as_mut().expect("fixture is signed").signer =
+        "did:web:assessor.example".to_owned();
 
     let result = validate(&catalog);
 
-    assert!(result.is_valid);
+    assert!(result.is_valid, "{:?}", result.errors);
     assert_eq!(result.conformance_level, ConformanceLevel::Discoverable);
+}
+
+#[test]
+fn another_contributor_does_not_hold_back_the_publisher() {
+    let mut catalog = parse("trust_clean.json");
+    let mut assessor = catalog.entries[0].trust_manifests[0].clone();
+
+    assessor.contributor = "did:web:assessor.example".to_owned();
+    assessor.signature = None;
+    catalog.entries[0].trust_manifests.push(assessor);
+
+    let result = validate(&catalog);
+
+    assert!(result.is_valid, "{:?}", result.errors);
+    assert_eq!(result.conformance_level, ConformanceLevel::Trusted);
 }
 
 #[test]
 fn expiry_follows_the_clock() {
     let mut catalog = parse("trust_clean.json");
-    let trust = catalog.entries[0]
-        .trust_manifest
+    let signature = catalog.entries[0].trust_manifests[0]
+        .signature
         .as_mut()
-        .expect("fixture has a trust manifest");
+        .expect("fixture is signed");
 
-    trust.expires_at = Some("2026-06-01T00:00:00Z".to_owned());
+    signature.expires_at = Some("2026-06-01T00:00:00Z".to_owned());
 
     let judge = |now: SystemTime| -> ValidationResult {
         validate_with(&catalog, &Options::default().with_clock(now))
@@ -212,7 +247,10 @@ fn expiry_follows_the_clock() {
     compare(
         "warning",
         &after.warnings,
-        &[at(Code::ManifestExpired, manifest(0, ".expiresAt"))],
+        &[at(
+            Code::SignatureExpired,
+            manifest(0, ".signature.expiresAt"),
+        )],
     );
 }
 

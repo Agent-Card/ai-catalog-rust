@@ -14,7 +14,8 @@ Canonicalization follows [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785) (JCS
 payload a signature covers is byte-identical to the one produced by other conforming
 implementations.
 
-- `canonicalize_for_signature` returns the payload a document-level `signature` covers.
+- `canonicalize_for_signature` returns the payload a catalog or manifest `signature` covers: the document without its
+  own `signature.jws` and `additionalSignatures`.
   Pass the original JSON, not a re-serialized `AiCatalog`, which drops empty arrays and
   strings, `null`s and members the SDK does not model.
 - `canonicalize_trust_manifest` returns the payload for a manifest-level signature, from

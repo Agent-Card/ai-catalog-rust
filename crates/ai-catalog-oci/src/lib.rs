@@ -6,7 +6,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
 
-use ai_catalog::{AiCatalog, CatalogEntry, HostInfo, MEDIA_TYPE_CATALOG, Publisher, TrustManifest};
+use ai_catalog::{
+    AiCatalog, CatalogEntry, HostInfo, MEDIA_TYPE_CATALOG, Publisher, Signature, TrustManifest,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest as _, Sha256};
@@ -137,6 +139,8 @@ struct EntryConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     version: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    digest: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     updated_at: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     extensions: Option<BTreeMap<String, Value>>,
@@ -213,7 +217,7 @@ pub fn pack_catalog(catalog: &AiCatalog) -> Result<OciArtifactSet> {
             entry_annotations,
         );
 
-        if let Some(trust_manifest) = &entry.trust_manifest {
+        for trust_manifest in &entry.trust_manifests {
             let trust_manifest_bytes = serde_json::to_vec(trust_manifest)?;
             let trust_config = store_blob(
                 &mut blobs,
@@ -271,11 +275,12 @@ pub fn unpack_catalog(artifacts: &OciArtifactSet) -> Result<AiCatalog> {
         &artifacts.index.annotations,
         "ai-catalog.extensions",
     )?;
-    let signature = artifacts
-        .index
-        .annotations
-        .get("ai-catalog.signature")
-        .cloned();
+    let signature =
+        annotations_json::<Signature>(&artifacts.index.annotations, "ai-catalog.signature")?;
+    let additional_signatures = annotations_json::<Value>(
+        &artifacts.index.annotations,
+        "ai-catalog.additionalSignatures",
+    )?;
     let extra_fields = annotations_json::<BTreeMap<String, Value>>(
         &artifacts.index.annotations,
         "ai-catalog.extraFields",
@@ -307,14 +312,12 @@ pub fn unpack_catalog(artifacts: &OciArtifactSet) -> Result<AiCatalog> {
             return Err(Error::MissingEntryContent(config.identifier.clone()));
         };
 
-        let trust_manifest = artifacts
+        let trust_manifests = artifacts
             .referrers
             .get(&descriptor.digest)
-            .and_then(|items| {
-                items.iter().find(|item| {
-                    item.artifact_type.as_deref() == Some(TRUST_MANIFEST_ARTIFACT_TYPE)
-                })
-            })
+            .into_iter()
+            .flatten()
+            .filter(|item| item.artifact_type.as_deref() == Some(TRUST_MANIFEST_ARTIFACT_TYPE))
             .map(|referrer| {
                 let bytes = artifacts
                     .blobs
@@ -323,7 +326,7 @@ pub fn unpack_catalog(artifacts: &OciArtifactSet) -> Result<AiCatalog> {
 
                 serde_json::from_slice(bytes).map_err(Error::from)
             })
-            .transpose()?;
+            .collect::<Result<Vec<_>>>()?;
 
         entries.push(CatalogEntry {
             identifier: config.identifier,
@@ -339,7 +342,8 @@ pub fn unpack_catalog(artifacts: &OciArtifactSet) -> Result<AiCatalog> {
             description: config.description,
             tags: config.tags,
             publisher: config.publisher,
-            trust_manifest,
+            digest: config.digest,
+            trust_manifests,
             updated_at: config.updated_at,
             extensions: config.extensions,
             extra_fields: config.extra_fields,
@@ -351,6 +355,7 @@ pub fn unpack_catalog(artifacts: &OciArtifactSet) -> Result<AiCatalog> {
         host,
         entries,
         signature,
+        additional_signatures,
         extensions,
         extra_fields,
     })
@@ -610,7 +615,17 @@ fn catalog_annotations(catalog: &AiCatalog) -> Result<BTreeMap<String, String>> 
     }
 
     if let Some(signature) = &catalog.signature {
-        annotations.insert("ai-catalog.signature".to_owned(), signature.clone());
+        annotations.insert(
+            "ai-catalog.signature".to_owned(),
+            serde_json::to_string(signature)?,
+        );
+    }
+
+    if let Some(additional_signatures) = &catalog.additional_signatures {
+        annotations.insert(
+            "ai-catalog.additionalSignatures".to_owned(),
+            serde_json::to_string(additional_signatures)?,
+        );
     }
 
     if !catalog.extra_fields.is_empty() {
@@ -745,7 +760,10 @@ fn entry_annotations(entry: &CatalogEntry) -> BTreeMap<String, String> {
 }
 
 fn trust_manifest_annotations(manifest: &TrustManifest) -> BTreeMap<String, String> {
-    BTreeMap::from([("ai-catalog.identity".to_owned(), manifest.identity.clone())])
+    BTreeMap::from([(
+        "ai-catalog.contributor".to_owned(),
+        manifest.contributor.clone(),
+    )])
 }
 
 fn cosign_signature_annotations(identity: &str, payload_digest: &str) -> BTreeMap<String, String> {
@@ -842,6 +860,7 @@ impl From<&CatalogEntry> for EntryConfig {
             description: entry.description.clone(),
             tags: entry.tags.clone(),
             version: entry.version.clone(),
+            digest: entry.digest.clone(),
             updated_at: entry.updated_at.clone(),
             extensions: entry.extensions.clone(),
             publisher: entry.publisher.clone(),
@@ -872,7 +891,7 @@ mod tests {
             "identifier": "urn:example:inline",
             "type": "application/json",
             "data": {"name": "inline"},
-            "trustManifest": {"identity": "urn:example:inline"}
+            "trustManifests": [{"contributor": "did:web:example.com", "attestations": [{"type": "t", "uri": "https://example.com/a"}]}]
         }]
     }"#;
 

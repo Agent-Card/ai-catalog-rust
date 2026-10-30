@@ -6,7 +6,12 @@
   "extensions": {
     "": true
   },
-  "signature": "not-a-detached-jws",
+  "signature": {
+    "signer": "did:web:example.com",
+    "profile": "did-web-v1",
+    "issuedAt": "2026-03-15T10:00:00Z",
+    "jws": "not-a-detached-jws"
+  },
   "entries": [
     {
       "identifier": "urn:both",
@@ -66,18 +71,20 @@
       "displayName": "Misaligned",
       "type": "application/json",
       "url": "https://example.com/mis.json",
-      "trustManifest": {
-        "identity": "did:web:evil.example"
-      }
+      "trustManifests": [
+        {
+          "contributor": "did:web:evil.example"
+        }
+      ]
     },
     {
       "url": "https://example.com/incomplete.json",
       "publisher": {
         "identityType": "did"
       },
-      "trustManifest": {
-        "identityType": "did"
-      }
+      "trustManifests": [
+        {}
+      ]
     },
     {
       "identifier": "plain-identifier",
@@ -94,69 +101,98 @@
       "extensions": {
         "not a namespace": 1
       },
-      "trustManifest": {
-        "identity": "urn:ext",
-        "extensions": {
-          "nodots": "bad"
-        },
-        "trustSchema": {
-          "identifier": "urn:trust:example",
-          "version": "1.0"
+      "trustManifests": [
+        {
+          "contributor": "urn:ext",
+          "trustSchema": {
+            "identifier": "urn:trust:example",
+            "version": "1.0"
+          },
+          "extensions": {
+            "nodots": "bad"
+          }
         }
-      }
+      ]
     },
     {
       "identifier": "urn:hollow",
       "displayName": "Hollow",
       "type": "application/json",
       "url": "https://example.com/hollow.json",
-      "trustManifest": {
-        "identity": "urn:hollow",
-        "privacyPolicyUrl": "https://example.com/privacy"
-      }
+      "extensions": {
+        "https://ai-catalog.org/extensions/policy-urls": {
+          "privacyPolicyUrl": "https://example.com/privacy"
+        }
+      },
+      "trustManifests": [
+        {
+          "contributor": "urn:hollow"
+        }
+      ]
     },
     {
       "identifier": "urn:unbound-signature",
       "displayName": "Unbound Signature",
       "type": "application/json",
       "url": "https://example.com/unbound.json",
-      "trustManifest": {
-        "identity": "urn:unbound-signature",
-        "signature": "eyJhbGciOiJFUzI1NiJ9..c2lnbmF0dXJlLXBsYWNlaG9sZGVy"
-      }
+      "trustManifests": [
+        {
+          "contributor": "urn:unbound-signature",
+          "signature": {
+            "signer": "urn:unbound-signature",
+            "profile": "did-web-v1",
+            "jws": "eyJhbGciOiJFUzI1NiIsInR5cCI6ImFpLWNhdGFsb2ctdHJ1c3QtbWFuaWZlc3QrandzIn0..c2lnbmF0dXJlLXBsYWNlaG9sZGVy"
+          }
+        }
+      ]
     },
     {
-      "identifier": "urn:stale",
+      "identifier": "urn:air:stale.example:agent:stale",
       "displayName": "Stale",
       "type": "application/json",
-      "url": "https://example.com/stale.json",
-      "trustManifest": {
-        "identity": "urn:stale",
-        "trustSchema": {
-          "identifier": "urn:trust:example",
-          "version": "1.0"
-        },
-        "issuedAt": "not-a-timestamp",
-        "expiresAt": "2020-01-01T00:00:00Z"
-      }
+      "url": "https://example.com/Stale.json",
+      "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+      "trustManifests": [
+        {
+          "contributor": "did:web:stale.example",
+          "subject": {
+            "identifier": "urn:air:stale.example:agent:stale",
+            "type": "application/json",
+            "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+          },
+          "signature": {
+            "signer": "did:web:stale.example",
+            "profile": "did-web-v1",
+            "issuedAt": "yesterday",
+            "expiresAt": "2026-03-16T10:00:00Z",
+            "jws": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImRpZDp3ZWI6c3RhbGUuZXhhbXBsZSNrZXktMSIsInR5cCI6ImFpLWNhdGFsb2ctdHJ1c3QtbWFuaWZlc3QrandzIn0..c2lnbmF0dXJlLXBsYWNlaG9sZGVy"
+          }
+        }
+      ]
     },
     {
       "identifier": "urn:mismatched-subject",
       "displayName": "Mismatched Subject",
       "type": "application/json",
       "url": "https://example.com/subject.json",
-      "trustManifest": {
-        "identity": "urn:mismatched-subject",
-        "subject": {
-          "identifier": "urn:other",
-          "version": "9.9.9",
-          "type": "application/gguf",
-          "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
-          "url": "https://example.com/other.json"
-        },
-        "issuedAt": "2026-03-15T10:00:00Z",
-        "signature": "eyJhbGciOiJFUzI1NiJ9..c2lnbmF0dXJlLXBsYWNlaG9sZGVy"
-      }
+      "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+      "trustManifests": [
+        {
+          "contributor": "urn:mismatched-subject",
+          "subject": {
+            "identifier": "urn:other",
+            "version": "9.9.9",
+            "type": "application/gguf",
+            "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "signature": {
+            "signer": "urn:mismatched-subject",
+            "profile": "did-web-v1",
+            "issuedAt": "2026-03-15T10:00:00Z",
+            "jws": "eyJhbGciOiJFUzI1NiIsInR5cCI6ImFpLWNhdGFsb2ctdHJ1c3QtbWFuaWZlc3QrandzIn0..c2lnbmF0dXJlLXBsYWNlaG9sZGVy"
+          }
+        }
+      ]
     },
     {
       "identifier": "urn:nest",
@@ -165,6 +201,138 @@
       "data": {
         "specVersion": 12345
       }
+    },
+    {
+      "identifier": "urn:air:acme.com:agent:foreign-signer",
+      "displayName": "foreign-signer",
+      "type": "application/json",
+      "url": "https://example.com/foreign-signer.json",
+      "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+      "trustManifests": [
+        {
+          "contributor": "did:web:acme.com",
+          "subject": {
+            "identifier": "urn:air:acme.com:agent:foreign-signer",
+            "type": "application/json",
+            "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+          },
+          "signature": {
+            "signer": "did:web:evil.example",
+            "profile": "did-web-v1",
+            "issuedAt": "2026-03-15T10:00:00Z",
+            "jws": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImRpZDp3ZWI6ZXZpbC5leGFtcGxlI2tleS0xIiwidHlwIjoiYWktY2F0YWxvZy10cnVzdC1tYW5pZmVzdCtqd3MifQ..c2lnbmF0dXJlLXBsYWNlaG9sZGVy"
+          }
+        }
+      ]
+    },
+    {
+      "identifier": "urn:air:acme.com:agent:no-typ",
+      "displayName": "no-typ",
+      "type": "application/json",
+      "url": "https://example.com/no-typ.json",
+      "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+      "trustManifests": [
+        {
+          "contributor": "did:web:acme.com",
+          "subject": {
+            "identifier": "urn:air:acme.com:agent:no-typ",
+            "type": "application/json",
+            "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+          },
+          "signature": {
+            "signer": "did:web:acme.com",
+            "profile": "did-web-v1",
+            "issuedAt": "2026-03-15T10:00:00Z",
+            "jws": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImRpZDp3ZWI6YWNtZS5jb20ja2V5LTEifQ..c2lnbmF0dXJlLXBsYWNlaG9sZGVy"
+          }
+        }
+      ]
+    },
+    {
+      "identifier": "urn:air:acme.com:agent:catalog-typ",
+      "displayName": "catalog-typ",
+      "type": "application/json",
+      "url": "https://example.com/catalog-typ.json",
+      "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+      "trustManifests": [
+        {
+          "contributor": "did:web:acme.com",
+          "subject": {
+            "identifier": "urn:air:acme.com:agent:catalog-typ",
+            "type": "application/json",
+            "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+          },
+          "signature": {
+            "signer": "did:web:acme.com",
+            "profile": "did-web-v1",
+            "issuedAt": "2026-03-15T10:00:00Z",
+            "jws": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImRpZDp3ZWI6YWNtZS5jb20ja2V5LTEiLCJ0eXAiOiJhaS1jYXRhbG9nK2p3cyJ9..c2lnbmF0dXJlLXBsYWNlaG9sZGVy"
+          }
+        }
+      ]
+    },
+    {
+      "identifier": "urn:air:acme.com:agent:relative-signer",
+      "displayName": "relative-signer",
+      "type": "application/json",
+      "url": "https://example.com/relative-signer.json",
+      "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+      "trustManifests": [
+        {
+          "contributor": "did:web:acme.com",
+          "subject": {
+            "identifier": "urn:air:acme.com:agent:relative-signer",
+            "type": "application/json",
+            "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+          },
+          "signature": {
+            "signer": "acme.com",
+            "profile": "did-web-v1",
+            "issuedAt": "2026-03-15T10:00:00Z",
+            "jws": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImFjbWUuY29tI2tleS0xIiwidHlwIjoiYWktY2F0YWxvZy10cnVzdC1tYW5pZmVzdCtqd3MifQ..c2lnbmF0dXJlLXBsYWNlaG9sZGVy"
+          }
+        }
+      ]
+    },
+    {
+      "identifier": "urn:air:acme.com:agent:relative-contributor",
+      "displayName": "relative-contributor",
+      "type": "application/json",
+      "url": "https://example.com/relative-contributor.json",
+      "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+      "trustManifests": [
+        {
+          "contributor": "acme",
+          "attestations": [
+            {
+              "type": "SOC2",
+              "uri": "https://example.com/soc2.pdf"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "identifier": "urn:air:acme.com:agent:empty-jws",
+      "displayName": "empty-jws",
+      "type": "application/json",
+      "url": "https://example.com/empty-jws.json",
+      "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+      "trustManifests": [
+        {
+          "contributor": "did:web:acme.com",
+          "subject": {
+            "identifier": "urn:air:acme.com:agent:empty-jws",
+            "type": "application/json",
+            "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+          },
+          "signature": {
+            "signer": "did:web:acme.com",
+            "issuedAt": "2026-03-15T10:00:00Z",
+            "jws": ""
+          }
+        }
+      ]
     }
   ]
 }

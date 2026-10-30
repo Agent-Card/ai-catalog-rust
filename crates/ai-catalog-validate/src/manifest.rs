@@ -4,50 +4,86 @@
 
 use ai_catalog::{Attestation, CatalogEntry, ProvenanceLink, Subject, TrustManifest, TrustSchema};
 use ai_catalog_trust::ParsedDigest;
-use time::OffsetDateTime;
-use time::format_description::well_known::Rfc3339;
 
-use crate::{Code, Validator, text};
+use crate::profile::DID_WEB_PROFILE;
+use crate::signature::Kind;
+use crate::{Code, Validator, is_absolute_uri};
 
 impl Validator {
     pub(crate) fn validate_entry_trust(&mut self, entry: &CatalogEntry, path: &str, depth: usize) {
-        let Some(manifest) = &entry.trust_manifest else {
-            return;
-        };
+        self.validate_digest(
+            entry.digest.as_deref().unwrap_or_default(),
+            &format!("{path}.digest"),
+        );
 
-        let path = format!("{path}.trustManifest");
+        let mut has_signed = false;
+        let mut has_publisher = false;
 
-        self.validate_trust_manifest(manifest, &path);
-        self.validate_subject_binding(entry, manifest, &path);
+        for (index, manifest) in entry.trust_manifests.iter().enumerate() {
+            let manifest_path = format!("{path}.trustManifests[{index}]");
 
-        let ready = is_signed(manifest)
-            && self.check_profile(entry, manifest, &path)
-            && !self.expired(manifest);
+            self.validate_trust_manifest(manifest, &manifest_path);
+            has_signed |= manifest.signature.is_some();
 
-        if depth == 0 {
-            self.manifests += 1;
-            self.held_back |= !ready;
+            let bound = self.validate_subject_binding(entry, manifest, &manifest_path);
+            let endorsed = self.is_publisher_endorsement(entry, manifest, &manifest_path);
+
+            has_publisher |= bound && endorsed;
+        }
+
+        if has_signed && entry.digest.as_deref().unwrap_or_default().is_empty() {
+            self.error(
+                Code::EntryDigest,
+                format!("{path}.digest"),
+                "an entry carrying a signed trust manifest must include digest",
+            );
+            has_publisher = false;
+        }
+
+        if depth == 0 && !entry.trust_manifests.is_empty() {
+            self.entries_with_manifests += 1;
+            self.held_back |= !has_publisher;
         }
     }
 
     fn validate_trust_manifest(&mut self, manifest: &TrustManifest, path: &str) {
         self.validate_extension_keys(manifest.extensions.as_ref(), &format!("{path}.extensions"));
-        self.validate_identity(&manifest.identity, &format!("{path}.identity"));
+        self.validate_contributor(&manifest.contributor, &format!("{path}.contributor"));
 
         if !is_substantive(manifest) {
             self.error(
                 Code::ManifestEmpty,
                 path,
-                "trustManifest must carry at least one substantive member (a signature with its \
-                 subject and issuedAt, a non-empty attestations or provenance array, or a \
-                 trustSchema) and must otherwise be omitted entirely",
+                "trust manifest must contain at least one of a signature, a trustSchema, \
+                 non-empty attestations or provenance, or non-empty extensions, and must \
+                 otherwise be omitted entirely",
             );
         }
 
-        self.validate_signed_members(manifest, path);
-        self.validate_signature(text(&manifest.signature), &format!("{path}.signature"));
-        self.validate_timestamp(text(&manifest.issued_at), &format!("{path}.issuedAt"));
-        self.validate_expiry(manifest, path);
+        if let Some(signature) = &manifest.signature {
+            let signature_path = format!("{path}.signature");
+
+            if manifest.subject.is_none() {
+                self.error(
+                    Code::ManifestSignedMember,
+                    format!("{path}.subject"),
+                    "a trust manifest carrying a signature must include a subject",
+                );
+            }
+
+            self.validate_signature(signature, Kind::Manifest, &signature_path);
+
+            if !signature.signer.is_empty() && signature.signer != manifest.contributor {
+                self.error(
+                    Code::ManifestSigner,
+                    format!("{signature_path}.signer"),
+                    format!(
+                        "signature.signer {:?} must exactly equal the contributor {:?}",
+                        signature.signer, manifest.contributor
+                    ),
+                );
+            }
+        }
 
         if let Some(subject) = &manifest.subject {
             self.validate_subject(subject, &format!("{path}.subject"));
@@ -66,61 +102,53 @@ impl Validator {
         }
     }
 
-    fn validate_identity(&mut self, identity: &str, path: &str) {
-        if identity.is_empty() {
+    fn validate_contributor(&mut self, contributor: &str, path: &str) {
+        if contributor.is_empty() {
             self.error(
-                Code::ManifestIdentity,
+                Code::ManifestContributor,
                 path,
-                "trustManifest.identity is required and must not be empty",
+                "trust manifest contributor is required and must not be empty",
             );
-        } else if !identity.contains(':') {
-            self.warning(
-                Code::ManifestIdentityUri,
+        } else if !is_absolute_uri(contributor) {
+            self.error(
+                Code::ManifestContributorUri,
                 path,
-                "trustManifest.identity SHOULD be a URI",
+                "trust manifest contributor must be an absolute URI",
             );
         }
     }
 
-    fn validate_signed_members(&mut self, manifest: &TrustManifest, path: &str) {
-        if text(&manifest.signature).is_empty() {
-            return;
+    /// Whether the manifest is a signed, current did:web endorsement of the entry by the
+    /// publisher its `urn:air` identifier names, free of profile violations.
+    fn is_publisher_endorsement(
+        &mut self,
+        entry: &CatalogEntry,
+        manifest: &TrustManifest,
+        path: &str,
+    ) -> bool {
+        let Some(signature) = &manifest.signature else {
+            return false;
+        };
+
+        let signature_path = format!("{path}.signature");
+
+        // Re-parse quietly: the structure was already reported while validating the manifest.
+        let Ok(header) = crate::jws::parse(&signature.jws) else {
+            return false;
+        };
+
+        if signature.profile != DID_WEB_PROFILE || !crate::jws::is_detached(&signature.jws) {
+            return false;
         }
 
-        if manifest.subject.is_none() {
-            self.error(
-                Code::ManifestSignedMember,
-                format!("{path}.subject"),
-                "a trustManifest carrying a signature must include a subject",
-            );
-        }
+        let profile_ok = self.check_signer_profile(signature, &header, &signature_path);
+        let current = self.signature_current(signature, &signature_path);
 
-        if text(&manifest.issued_at).is_empty() {
-            self.error(
-                Code::ManifestSignedMember,
-                format!("{path}.issuedAt"),
-                "a trustManifest carrying a signature must include issuedAt",
-            );
-        }
-    }
-
-    pub(crate) fn expired(&self, manifest: &TrustManifest) -> bool {
-        OffsetDateTime::parse(text(&manifest.expires_at), &Rfc3339)
-            .is_ok_and(|expires_at| expires_at < self.now)
-    }
-
-    fn validate_expiry(&mut self, manifest: &TrustManifest, path: &str) {
-        let expires_at = text(&manifest.expires_at);
-
-        self.validate_timestamp(expires_at, &format!("{path}.expiresAt"));
-
-        if self.expired(manifest) {
-            self.warning(
-                Code::ManifestExpired,
-                format!("{path}.expiresAt"),
-                format!("trustManifest expired at {expires_at:?} and SHOULD be rejected"),
-            );
-        }
+        profile_ok
+            && current
+            && signature.signer == manifest.contributor
+            && header.typ == "ai-catalog-trust-manifest+jws"
+            && Self::is_publisher(entry, &signature.signer)
     }
 
     fn validate_subject(&mut self, subject: &Subject, path: &str) {
@@ -141,15 +169,18 @@ impl Validator {
         self.validate_digest(&subject.digest, &format!("{path}.digest"));
     }
 
+    /// Checks the subject against the entry release and reports whether it matches.
     fn validate_subject_binding(
         &mut self,
         entry: &CatalogEntry,
         manifest: &TrustManifest,
         path: &str,
-    ) {
+    ) -> bool {
         let Some(subject) = &manifest.subject else {
-            return;
+            return false;
         };
+
+        let before = self.errors.len();
 
         if !subject.identifier.is_empty() && subject.identifier != entry.identifier {
             self.error(
@@ -158,18 +189,6 @@ impl Validator {
                 format!(
                     "subject.identifier {:?} must equal the entry identifier {:?}",
                     subject.identifier, entry.identifier
-                ),
-            );
-        }
-
-        let (subject_version, entry_version) = (text(&subject.version), text(&entry.version));
-
-        if subject_version != entry_version {
-            self.error(
-                Code::SubjectMismatch,
-                format!("{path}.subject.version"),
-                format!(
-                    "subject.version {subject_version:?} must equal the entry version {entry_version:?} (both absent or both present)"
                 ),
             );
         }
@@ -188,15 +207,32 @@ impl Validator {
             );
         }
 
-        let (subject_url, entry_url) = (text(&subject.url), text(&entry.url));
+        let entry_digest = entry.digest.as_deref().unwrap_or_default();
 
-        if !subject_url.is_empty() && subject_url != entry_url {
+        if !subject.digest.is_empty() && !entry_digest.is_empty() && subject.digest != entry_digest
+        {
             self.error(
                 Code::SubjectMismatch,
-                format!("{path}.subject.url"),
-                format!("subject.url {subject_url:?} must equal the entry url {entry_url:?}"),
+                format!("{path}.subject.digest"),
+                format!(
+                    "subject.digest {:?} must equal the entry digest {entry_digest:?}",
+                    subject.digest
+                ),
             );
         }
+
+        if subject.version != entry.version {
+            self.error(
+                Code::SubjectMismatch,
+                format!("{path}.subject.version"),
+                format!(
+                    "subject.version {:?} must be present exactly when the entry version is and equal it ({:?})",
+                    subject.version, entry.version
+                ),
+            );
+        }
+
+        self.errors.len() == before
     }
 
     fn validate_trust_schema(&mut self, schema: &TrustSchema, path: &str) {
@@ -234,7 +270,10 @@ impl Validator {
             );
         }
 
-        self.validate_digest(text(&attestation.digest), &format!("{path}.digest"));
+        self.validate_digest(
+            attestation.digest.as_deref().unwrap_or_default(),
+            &format!("{path}.digest"),
+        );
     }
 
     fn validate_provenance(&mut self, link: &ProvenanceLink, path: &str) {
@@ -254,10 +293,13 @@ impl Validator {
             );
         }
 
-        self.validate_digest(text(&link.source_digest), &format!("{path}.sourceDigest"));
+        self.validate_digest(
+            link.source_digest.as_deref().unwrap_or_default(),
+            &format!("{path}.sourceDigest"),
+        );
     }
 
-    fn validate_digest(&mut self, value: &str, path: &str) {
+    pub(crate) fn validate_digest(&mut self, value: &str, path: &str) {
         if value.is_empty() {
             return;
         }
@@ -268,15 +310,13 @@ impl Validator {
     }
 }
 
-fn is_signed(manifest: &TrustManifest) -> bool {
-    !text(&manifest.signature).is_empty()
-        && manifest.subject.is_some()
-        && !text(&manifest.issued_at).is_empty()
-}
-
 fn is_substantive(manifest: &TrustManifest) -> bool {
-    is_signed(manifest)
+    manifest.signature.is_some()
+        || manifest.trust_schema.is_some()
         || !manifest.attestations.is_empty()
         || !manifest.provenance.is_empty()
-        || manifest.trust_schema.is_some()
+        || manifest
+            .extensions
+            .as_ref()
+            .is_some_and(|extensions| !extensions.is_empty())
 }

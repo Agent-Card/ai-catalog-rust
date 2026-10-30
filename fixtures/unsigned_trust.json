@@ -10,19 +10,21 @@
       "displayName": "Artifact",
       "type": "application/json",
       "url": "https://example.com/artifact.json",
-      "trustManifest": {
-        "identity": "urn:example:artifact",
-        "trustSchema": {
-          "identifier": "urn:trust:example",
-          "version": "1.0"
-        },
-        "provenance": [
-          {
-            "relation": "publishedFrom",
-            "sourceId": "https://github.com/example/repo"
-          }
-        ]
-      }
+      "trustManifests": [
+        {
+          "contributor": "urn:example:artifact",
+          "trustSchema": {
+            "identifier": "urn:trust:example",
+            "version": "1.0"
+          },
+          "provenance": [
+            {
+              "relation": "publishedFrom",
+              "sourceId": "https://github.com/example/repo"
+            }
+          ]
+        }
+      ]
     }
   ]
 }

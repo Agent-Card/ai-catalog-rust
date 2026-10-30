@@ -6,14 +6,12 @@ use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use serde_json::{Map, Value};
 
-pub(crate) const ALLOWED_ALGORITHMS: [&str; 6] =
-    ["ES256", "ES384", "EdDSA", "PS256", "PS384", "RS256"];
-
 const COMPACT_PARTS: usize = 3;
 
 pub(crate) struct Header {
     pub(crate) algorithm: String,
     pub(crate) key_id: String,
+    pub(crate) typ: String,
     members: Map<String, Value>,
 }
 
@@ -43,10 +41,12 @@ pub(crate) fn parse(signature: &str) -> Result<Header, String> {
     }
 
     let key_id = string_member(&members, "kid")?;
+    let typ = string_member(&members, "typ")?;
 
     Ok(Header {
         algorithm,
         key_id,
+        typ,
         members,
     })
 }
@@ -69,7 +69,5 @@ pub(crate) fn is_detached(signature: &str) -> bool {
 }
 
 pub(crate) fn is_forbidden(algorithm: &str) -> bool {
-    let normalized = algorithm.to_ascii_uppercase();
-
-    normalized == "NONE" || normalized.starts_with("HS")
+    algorithm.eq_ignore_ascii_case("none")
 }
