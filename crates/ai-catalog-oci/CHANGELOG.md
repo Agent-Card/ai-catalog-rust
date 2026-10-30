@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0](https://github.com/Agent-Card/ai-catalog-rust/compare/ai-catalog-oci-v0.3.0...ai-catalog-oci-v0.4.0) - 2026-10-30
+
+### Added
+
+- [**breaking**] align the trust model with spec #117 ([#59](https://github.com/Agent-Card/ai-catalog-rust/pull/59))
+
 ## [0.3.0](https://github.com/Agent-Card/ai-catalog-rust/compare/ai-catalog-oci-v0.2.1...ai-catalog-oci-v0.3.0) - 2026-10-19
 
 ### Added
