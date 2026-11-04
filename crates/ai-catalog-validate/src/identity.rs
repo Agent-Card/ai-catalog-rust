@@ -43,3 +43,10 @@ pub(crate) fn is_root_did_web(value: &str) -> bool {
         .strip_prefix(DID_WEB_PREFIX)
         .is_some_and(is_valid_publisher)
 }
+
+/// Whether the signer is the publisher the `urn:air` identifier names.
+pub(crate) fn is_publisher_of(identifier: &str, signer: &str) -> bool {
+    publisher(identifier)
+        .filter(|publisher| is_valid_publisher(publisher))
+        .is_some_and(|publisher| signer == did(publisher))
+}
