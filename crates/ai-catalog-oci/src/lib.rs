@@ -9,6 +9,7 @@ use std::path::Path;
 use ai_catalog::{
     AiCatalog, CatalogEntry, HostInfo, MEDIA_TYPE_CATALOG, Publisher, Signature, TrustManifest,
 };
+use ai_catalog_trust::canonicalize_trust_manifest;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest as _, Sha256};
@@ -64,6 +65,8 @@ pub enum Error {
     AmbiguousLayoutReference,
     #[error("missing OCI subject descriptor for digest '{0}'")]
     MissingSubjectDescriptor(String),
+    #[error("failed to canonicalize trust manifest: {0}")]
+    Canonicalization(#[from] ai_catalog_trust::Error),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -218,6 +221,8 @@ pub fn pack_catalog(catalog: &AiCatalog) -> Result<OciArtifactSet> {
         );
 
         for trust_manifest in &entry.trust_manifests {
+            // The config blob keeps the complete manifest, including `signature.jws`,
+            // so unpacking restores the entry exactly.
             let trust_manifest_bytes = serde_json::to_vec(trust_manifest)?;
             let trust_config = store_blob(
                 &mut blobs,
@@ -226,12 +231,23 @@ pub fn pack_catalog(catalog: &AiCatalog) -> Result<OciArtifactSet> {
                 None,
                 BTreeMap::new(),
             );
+            // The layer holds the exact bytes a signer signs: the JCS form without
+            // `signature.jws`. Its digest is the `payloadDigest` that Cosign
+            // referrers record, so verifiers can check a signature against it as is.
+            let signed_payload = canonicalize_trust_manifest(trust_manifest)?;
+            let signed_payload_layer = store_blob(
+                &mut blobs,
+                signed_payload.as_bytes(),
+                TRUST_MANIFEST_ARTIFACT_TYPE,
+                None,
+                BTreeMap::new(),
+            );
             let trust_referrer = OciImageManifest {
                 schema_version: 2,
                 media_type: OCI_IMAGE_MANIFEST_MEDIA_TYPE.to_owned(),
                 artifact_type: Some(TRUST_MANIFEST_ARTIFACT_TYPE.to_owned()),
                 config: trust_config,
-                layers: Vec::new(),
+                layers: vec![signed_payload_layer],
                 subject: Some(manifest_descriptor.clone()),
                 annotations: trust_manifest_annotations(trust_manifest),
             };
@@ -877,6 +893,7 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use ai_catalog::{AiCatalog, MEDIA_TYPE_CATALOG, parse_file, parse_str};
+    use sha2::Digest as _;
 
     use super::{
         COSIGN_PUBLIC_KEY_ARTIFACT_TYPE, COSIGN_SIGNATURE_ARTIFACT_TYPE, Error,
@@ -938,6 +955,30 @@ mod tests {
                 .map(|referrer| referrer.artifact_type.as_deref())
                 .collect::<Vec<_>>(),
             [Some(TRUST_MANIFEST_ARTIFACT_TYPE)]
+        );
+    }
+
+    #[test]
+    fn trust_manifest_referrer_carries_the_signed_payload() {
+        let catalog = parse_str(INLINE).expect("parses");
+        let artifacts = pack_catalog(&catalog).expect("packs");
+        let entry = &artifacts.index.manifests[0].digest;
+        let referrer = &artifacts.referrers[entry][0];
+
+        assert_eq!(referrer.layers.len(), 1);
+        let layer = &referrer.layers[0];
+        assert_eq!(layer.media_type, TRUST_MANIFEST_ARTIFACT_TYPE);
+
+        let expected =
+            ai_catalog_trust::canonicalize_trust_manifest(&catalog.entries[0].trust_manifests[0])
+                .expect("canonicalizes");
+        assert_eq!(artifacts.blobs[&layer.digest], expected.as_bytes());
+        assert_eq!(
+            layer.digest,
+            format!(
+                "sha256:{}",
+                super::digest_hex(sha2::Sha256::digest(expected.as_bytes()).as_slice())
+            )
         );
     }
 
