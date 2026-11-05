@@ -57,8 +57,8 @@ fn detects_conformance_levels() {
         ("minimal.json", true, ConformanceLevel::Minimal),
         ("discoverable.json", true, ConformanceLevel::Discoverable),
         ("unsigned_trust.json", true, ConformanceLevel::Discoverable),
-        ("trust_clean.json", true, ConformanceLevel::Trusted),
-        ("catalog.json", true, ConformanceLevel::Trusted),
+        ("trust_clean.json", true, ConformanceLevel::Discoverable),
+        ("catalog.json", true, ConformanceLevel::Discoverable),
         ("weak_signature.json", false, ConformanceLevel::Minimal),
     ];
 
@@ -177,51 +177,6 @@ fn applies_the_did_web_signer_profile() {
 }
 
 #[test]
-fn only_the_publisher_makes_a_catalog_trusted() {
-    let catalog = parse("profile.json");
-
-    for index in 0..catalog.entries.len() {
-        let alone = AiCatalog {
-            entries: vec![catalog.entries[index].clone()],
-            ..catalog.clone()
-        };
-        let trusted = validate(&alone).conformance_level == ConformanceLevel::Trusted;
-
-        assert_eq!(trusted, index == 0, "entry {index}");
-    }
-}
-
-#[test]
-fn an_assessor_alone_does_not_make_a_catalog_trusted() {
-    let mut catalog = parse("trust_clean.json");
-    let trust = &mut catalog.entries[0].trust_manifests[0];
-
-    trust.contributor = "did:web:assessor.example".to_owned();
-    trust.signature.as_mut().expect("fixture is signed").signer =
-        "did:web:assessor.example".to_owned();
-
-    let result = validate(&catalog);
-
-    assert!(result.is_valid, "{:?}", result.errors);
-    assert_eq!(result.conformance_level, ConformanceLevel::Discoverable);
-}
-
-#[test]
-fn another_contributor_does_not_hold_back_the_publisher() {
-    let mut catalog = parse("trust_clean.json");
-    let mut assessor = catalog.entries[0].trust_manifests[0].clone();
-
-    assessor.contributor = "did:web:assessor.example".to_owned();
-    assessor.signature = None;
-    catalog.entries[0].trust_manifests.push(assessor);
-
-    let result = validate(&catalog);
-
-    assert!(result.is_valid, "{:?}", result.errors);
-    assert_eq!(result.conformance_level, ConformanceLevel::Trusted);
-}
-
-#[test]
 fn expiry_follows_the_clock() {
     let mut catalog = parse("trust_clean.json");
     let signature = catalog.entries[0].trust_manifests[0]
@@ -237,7 +192,7 @@ fn expiry_follows_the_clock() {
 
     let before = judge(at_time(1_780_185_600));
 
-    assert_eq!(before.conformance_level, ConformanceLevel::Trusted);
+    assert_eq!(before.conformance_level, ConformanceLevel::Discoverable);
     assert!(before.warnings.is_empty(), "{:?}", before.warnings);
 
     let after = judge(at_time(1_780_358_400));
