@@ -2,7 +2,7 @@
 // Copyright AGNTCY Contributors (https://github.com/agntcy)
 // SPDX-License-Identifier: Apache-2.0
 
-use ai_catalog::{CatalogEntry, Signature};
+use ai_catalog::Signature;
 
 use crate::{Code, Validator, identity, jws};
 
@@ -73,12 +73,5 @@ impl Validator {
         }
 
         self.warnings.len() == before
-    }
-
-    /// Whether the signer is the publisher the entry's `urn:air` identifier names.
-    pub(crate) fn is_publisher(entry: &CatalogEntry, signer: &str) -> bool {
-        identity::publisher(&entry.identifier)
-            .filter(|publisher| identity::is_valid_publisher(publisher))
-            .is_some_and(|publisher| signer == identity::did(publisher))
     }
 }

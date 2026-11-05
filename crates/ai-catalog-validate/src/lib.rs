@@ -6,11 +6,13 @@
 //! conformance level.
 
 mod code;
+mod did;
 mod identity;
 mod jws;
 mod manifest;
 mod profile;
 mod signature;
+mod verify;
 
 use std::collections::{BTreeMap, HashSet};
 use std::fmt;
@@ -24,6 +26,7 @@ use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
 pub use code::Code;
+pub use verify::{EntryTrust, Error, Fetch, ManifestTrust, Outcome, Verification, verify};
 
 const DEFAULT_MAX_NESTING_DEPTH: usize = 4;
 const MAX_SUPPORTED_MAJOR: u64 = 1;
@@ -35,9 +38,7 @@ pub enum ConformanceLevel {
     Minimal,
     /// A valid document with a host.
     Discoverable,
-    /// A discoverable document in which every root entry that carries trust manifests has one
-    /// signed by its publisher under the did:web Publisher Profile, bound to the entry and
-    /// current. Signatures are not verified.
+    /// Discoverable with a verified publisher endorsement. Only [`verify`] reports it.
     Trusted,
 }
 
@@ -74,6 +75,8 @@ pub struct ValidationResult {
 pub struct Options {
     now: Option<SystemTime>,
     max_nesting_depth: usize,
+    authorized_operators: Vec<String>,
+    base_url: Option<String>,
 }
 
 impl Default for Options {
@@ -81,6 +84,8 @@ impl Default for Options {
         Self {
             now: None,
             max_nesting_depth: DEFAULT_MAX_NESTING_DEPTH,
+            authorized_operators: Vec::new(),
+            base_url: None,
         }
     }
 }
@@ -90,6 +95,24 @@ impl Options {
     #[must_use]
     pub fn with_clock(mut self, now: SystemTime) -> Self {
         self.now = Some(now);
+        self
+    }
+
+    /// Sets the signers authorized to endorse the catalog itself.
+    #[must_use]
+    pub fn with_authorized_operators<I, S>(mut self, operators: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        self.authorized_operators = operators.into_iter().map(Into::into).collect();
+        self
+    }
+
+    /// Sets the URL relative entry URLs resolve against.
+    #[must_use]
+    pub fn with_base_url(mut self, url: impl Into<String>) -> Self {
+        self.base_url = Some(url.into());
         self
     }
 
@@ -117,8 +140,6 @@ pub fn validate_with(catalog: &AiCatalog, options: &Options) -> ValidationResult
         max_depth: options.max_nesting_depth,
         errors: Vec::new(),
         warnings: Vec::new(),
-        entries_with_manifests: 0,
-        held_back: false,
     };
 
     validator.validate_catalog(catalog, "catalog", 0);
@@ -136,10 +157,6 @@ struct Validator {
     max_depth: usize,
     errors: Vec<Diagnostic>,
     warnings: Vec<Diagnostic>,
-    /// Counts the root entries carrying trust manifests; `held_back` is set when one of them has
-    /// no manifest ready to be trusted.
-    entries_with_manifests: usize,
-    held_back: bool,
 }
 
 impl Validator {
@@ -162,8 +179,6 @@ impl Validator {
     fn level(&self, catalog: &AiCatalog) -> ConformanceLevel {
         if !self.errors.is_empty() || catalog.host.is_none() {
             ConformanceLevel::Minimal
-        } else if self.entries_with_manifests > 0 && !self.held_back {
-            ConformanceLevel::Trusted
         } else {
             ConformanceLevel::Discoverable
         }
@@ -279,7 +294,7 @@ impl Validator {
         self.validate_extension_keys(entry.extensions.as_ref(), &format!("{path}.extensions"));
         self.validate_policy_urls(entry.extensions.as_ref(), &format!("{path}.extensions"));
         self.validate_publisher(entry.publisher.as_ref(), &format!("{path}.publisher"));
-        self.validate_entry_trust(entry, path, depth);
+        self.validate_entry_trust(entry, path);
         self.validate_nested_catalog(entry, path, depth);
 
         if !entry.identifier.is_empty() && !entry.identifier.contains(':') {
