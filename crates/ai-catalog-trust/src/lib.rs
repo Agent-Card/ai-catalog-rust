@@ -2,6 +2,8 @@
 // Copyright AGNTCY Contributors (https://github.com/agntcy)
 // SPDX-License-Identifier: Apache-2.0
 
+mod jws;
+
 use std::fmt;
 
 use ai_catalog::TrustManifest;
@@ -10,6 +12,8 @@ use serde::{Deserialize, Deserializer};
 use serde_json::{Map, Number, Value};
 use sha2::{Digest as _, Sha256, Sha384, Sha512};
 use thiserror::Error;
+
+pub use jws::{P256Key, verify_es256};
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -23,6 +27,12 @@ pub enum Error {
     WeakDigestAlgorithm(String),
     #[error("digest hex value contains non-hex characters")]
     InvalidDigestHex,
+    #[error("invalid JWK: {0}")]
+    Jwk(String),
+    #[error("invalid JWS: {0}")]
+    Jws(String),
+    #[error("the signature does not verify")]
+    SignatureMismatch,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -108,7 +118,12 @@ pub fn canonicalize(json: impl AsRef<[u8]>) -> Result<String> {
 /// Returns the JCS form of a manifest or catalog without its own `signature.jws` and
 /// `additionalSignatures`, the payload a detached JWS covers.
 pub fn canonicalize_for_signature(json: impl AsRef<[u8]>) -> Result<String> {
-    let mut value = parse_json(json)?;
+    canonicalize_value_for_signature(&parse_json(json)?)
+}
+
+/// Like [`canonicalize_for_signature`], for a document that is already parsed.
+pub fn canonicalize_value_for_signature(value: &Value) -> Result<String> {
+    let mut value = value.clone();
 
     strip_signature(&mut value);
 

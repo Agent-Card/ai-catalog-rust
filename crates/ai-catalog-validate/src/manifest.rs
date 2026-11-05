@@ -10,14 +10,13 @@ use crate::signature::Kind;
 use crate::{Code, Validator, is_absolute_uri};
 
 impl Validator {
-    pub(crate) fn validate_entry_trust(&mut self, entry: &CatalogEntry, path: &str, depth: usize) {
+    pub(crate) fn validate_entry_trust(&mut self, entry: &CatalogEntry, path: &str) {
         self.validate_digest(
             entry.digest.as_deref().unwrap_or_default(),
             &format!("{path}.digest"),
         );
 
         let mut has_signed = false;
-        let mut has_publisher = false;
 
         for (index, manifest) in entry.trust_manifests.iter().enumerate() {
             let manifest_path = format!("{path}.trustManifests[{index}]");
@@ -25,10 +24,8 @@ impl Validator {
             self.validate_trust_manifest(manifest, &manifest_path);
             has_signed |= manifest.signature.is_some();
 
-            let bound = self.validate_subject_binding(entry, manifest, &manifest_path);
-            let endorsed = self.is_publisher_endorsement(entry, manifest, &manifest_path);
-
-            has_publisher |= bound && endorsed;
+            self.validate_subject_binding(entry, manifest, &manifest_path);
+            self.check_manifest_profile(manifest, &manifest_path);
         }
 
         if has_signed && entry.digest.as_deref().unwrap_or_default().is_empty() {
@@ -37,12 +34,6 @@ impl Validator {
                 format!("{path}.digest"),
                 "an entry carrying a signed trust manifest must include digest",
             );
-            has_publisher = false;
-        }
-
-        if depth == 0 && !entry.trust_manifests.is_empty() {
-            self.entries_with_manifests += 1;
-            self.held_back |= !has_publisher;
         }
     }
 
@@ -118,37 +109,25 @@ impl Validator {
         }
     }
 
-    /// Whether the manifest is a signed, current did:web endorsement of the entry by the
-    /// publisher its `urn:air` identifier names, free of profile violations.
-    fn is_publisher_endorsement(
-        &mut self,
-        entry: &CatalogEntry,
-        manifest: &TrustManifest,
-        path: &str,
-    ) -> bool {
+    /// Warns about did:web profile violations and a signature outside its validity window.
+    fn check_manifest_profile(&mut self, manifest: &TrustManifest, path: &str) {
         let Some(signature) = &manifest.signature else {
-            return false;
+            return;
         };
 
         let signature_path = format!("{path}.signature");
 
         // Re-parse quietly: the structure was already reported while validating the manifest.
         let Ok(header) = crate::jws::parse(&signature.jws) else {
-            return false;
+            return;
         };
 
         if signature.profile != DID_WEB_PROFILE || !crate::jws::is_detached(&signature.jws) {
-            return false;
+            return;
         }
 
-        let profile_ok = self.check_signer_profile(signature, &header, &signature_path);
-        let current = self.signature_current(signature, &signature_path);
-
-        profile_ok
-            && current
-            && signature.signer == manifest.contributor
-            && header.typ == "ai-catalog-trust-manifest+jws"
-            && Self::is_publisher(entry, &signature.signer)
+        self.check_signer_profile(signature, &header, &signature_path);
+        self.signature_current(signature, &signature_path);
     }
 
     fn validate_subject(&mut self, subject: &Subject, path: &str) {
@@ -169,70 +148,23 @@ impl Validator {
         self.validate_digest(&subject.digest, &format!("{path}.digest"));
     }
 
-    /// Checks the subject against the entry release and reports whether it matches.
     fn validate_subject_binding(
         &mut self,
         entry: &CatalogEntry,
         manifest: &TrustManifest,
         path: &str,
-    ) -> bool {
+    ) {
         let Some(subject) = &manifest.subject else {
-            return false;
+            return;
         };
 
-        let before = self.errors.len();
-
-        if !subject.identifier.is_empty() && subject.identifier != entry.identifier {
+        for (member, message) in subject_mismatches(entry, subject) {
             self.error(
                 Code::SubjectMismatch,
-                format!("{path}.subject.identifier"),
-                format!(
-                    "subject.identifier {:?} must equal the entry identifier {:?}",
-                    subject.identifier, entry.identifier
-                ),
+                format!("{path}.subject.{member}"),
+                message,
             );
         }
-
-        if !subject.r#type.is_empty()
-            && !entry.entry_type.is_empty()
-            && subject.r#type != entry.entry_type
-        {
-            self.error(
-                Code::SubjectMismatch,
-                format!("{path}.subject.type"),
-                format!(
-                    "subject.type {:?} must equal the entry type {:?}",
-                    subject.r#type, entry.entry_type
-                ),
-            );
-        }
-
-        let entry_digest = entry.digest.as_deref().unwrap_or_default();
-
-        if !subject.digest.is_empty() && !entry_digest.is_empty() && subject.digest != entry_digest
-        {
-            self.error(
-                Code::SubjectMismatch,
-                format!("{path}.subject.digest"),
-                format!(
-                    "subject.digest {:?} must equal the entry digest {entry_digest:?}",
-                    subject.digest
-                ),
-            );
-        }
-
-        if subject.version != entry.version {
-            self.error(
-                Code::SubjectMismatch,
-                format!("{path}.subject.version"),
-                format!(
-                    "subject.version {:?} must be present exactly when the entry version is and equal it ({:?})",
-                    subject.version, entry.version
-                ),
-            );
-        }
-
-        self.errors.len() == before
     }
 
     fn validate_trust_schema(&mut self, schema: &TrustSchema, path: &str) {
@@ -319,4 +251,60 @@ fn is_substantive(manifest: &TrustManifest) -> bool {
             .extensions
             .as_ref()
             .is_some_and(|extensions| !extensions.is_empty())
+}
+
+/// The members of the subject that do not match the entry release, with what is wrong. Members
+/// that are empty are reported as missing elsewhere.
+pub(crate) fn subject_mismatches(
+    entry: &CatalogEntry,
+    subject: &Subject,
+) -> Vec<(&'static str, String)> {
+    let mut mismatches = Vec::new();
+
+    if !subject.identifier.is_empty() && subject.identifier != entry.identifier {
+        mismatches.push((
+            "identifier",
+            format!(
+                "subject.identifier {:?} must equal the entry identifier {:?}",
+                subject.identifier, entry.identifier
+            ),
+        ));
+    }
+
+    if !subject.r#type.is_empty()
+        && !entry.entry_type.is_empty()
+        && subject.r#type != entry.entry_type
+    {
+        mismatches.push((
+            "type",
+            format!(
+                "subject.type {:?} must equal the entry type {:?}",
+                subject.r#type, entry.entry_type
+            ),
+        ));
+    }
+
+    let entry_digest = entry.digest.as_deref().unwrap_or_default();
+
+    if !subject.digest.is_empty() && !entry_digest.is_empty() && subject.digest != entry_digest {
+        mismatches.push((
+            "digest",
+            format!(
+                "subject.digest {:?} must equal the entry digest {entry_digest:?}",
+                subject.digest
+            ),
+        ));
+    }
+
+    if subject.version != entry.version {
+        mismatches.push((
+            "version",
+            format!(
+                "subject.version {:?} must be present exactly when the entry version is and equal it ({:?})",
+                subject.version, entry.version
+            ),
+        ));
+    }
+
+    mismatches
 }

@@ -16,7 +16,7 @@ pub(crate) enum Kind {
 }
 
 impl Kind {
-    fn typ(self) -> &'static str {
+    pub(crate) fn typ(self) -> &'static str {
         match self {
             Self::Catalog => "ai-catalog+jws",
             Self::Manifest => "ai-catalog-trust-manifest+jws",
@@ -24,7 +24,7 @@ impl Kind {
     }
 }
 
-fn instant(value: &str) -> Option<OffsetDateTime> {
+pub(crate) fn instant(value: &str) -> Option<OffsetDateTime> {
     OffsetDateTime::parse(value, &Rfc3339).ok()
 }
 

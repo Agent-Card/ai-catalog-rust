@@ -34,7 +34,7 @@ these crates from crates.io.
 |---|---|
 | **Minimal** | `specVersion`, and every entry carrying `identifier`, `type`, and exactly one of `url` or `data` |
 | **Discoverable** | Minimal + a `host` object identifying the catalog operator |
-| **Trusted** | Discoverable + every root entry that carries `trustManifests` has one signed by its publisher under the did:web Publisher Profile, bound to the entry and current |
+| **Trusted** | Discoverable + a verified publisher endorsement; only `ai_catalog_validate::verify` reports it, `validate` never verifies signatures |
 
 ## Usage
 
