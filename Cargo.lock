@@ -37,6 +37,7 @@ name = "ai-catalog-oci"
 version = "0.3.0"
 dependencies = [
  "ai-catalog",
+ "ai-catalog-trust",
  "serde",
  "serde_json",
  "sha2",
